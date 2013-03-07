@@ -25,7 +25,7 @@ puts "TICKS"
 ss = []
 `fgrep #{ARGV[0]} /var/log/statstest.log | head -n#{ARGV[1]}`.split("\n").each do |line|
   l = line.split("\t")
-  ss.push({:ts => l[0], :ns => l[1], :v => l[2]})  
+  ss.push({:ts => l[0].to_i, :ns => l[1], :v => l[2].to_i})  
 end
 
 puts ss.length
