@@ -22,6 +22,14 @@ time_gem = Time.now.to_f
 
 Statsr.sort s;
 
+puts s.length
+pp s[0]
+pp s[1]
+pp s[2]
+pp s[s.length - 3]
+pp s[s.length - 2]
+pp s[s.length - 1]
+
 time_sort = Time.now.to_f
 
 puts "TICKS"

@@ -80,29 +80,19 @@ static VALUE query(VALUE self, VALUE logfile, VALUE query_ns, int query_limit) {
 /**
  * Implementation of quicksort algorithm.
  */
-void time_sort(int left, int right, VALUE ary) {
-  if (RARRAY_LEN(ary) < 2) {
-    return;
-  }
-
-  VALUE statsr_key_ts = rb_str_intern(rb_str_new2("ts"));
-
+void time_sort(int left, int right, VALUE ary, VALUE statsr_key_ts) {
   int i = left;
   int j = right;
   int p = (i + j) / 2;
   int pv = NUM2INT(rb_hash_aref(rb_ary_entry(ary, p), statsr_key_ts));
-  int iv = NUM2INT(rb_hash_aref(rb_ary_entry(ary, i), statsr_key_ts));
-  int jv = NUM2INT(rb_hash_aref(rb_ary_entry(ary, j), statsr_key_ts));
   VALUE tmp;
 
   while (i <= j) {
-    while (iv < pv) {
+    while (NUM2INT(rb_hash_aref(rb_ary_entry(ary, i), statsr_key_ts)) < pv) {
       i++;
-      iv = NUM2INT(rb_hash_aref(rb_ary_entry(ary, i), statsr_key_ts));
     }
-    while (jv > pv) {
+    while (NUM2INT(rb_hash_aref(rb_ary_entry(ary, j), statsr_key_ts)) > pv) {
       j--;
-      jv = NUM2INT(rb_hash_aref(rb_ary_entry(ary, j), statsr_key_ts));
     }
     if (i <= j) {
       tmp = rb_hash_aref(rb_ary_entry(ary, i), statsr_key_ts);
@@ -114,16 +104,17 @@ void time_sort(int left, int right, VALUE ary) {
   }
 
   if (left < j) {
-    time_sort(left, j, ary);
+    time_sort(left, j, ary, statsr_key_ts);
   }
   if (i < right) {
-    time_sort(i, right, ary);
+    time_sort(i, right, ary, statsr_key_ts);
   }
 }
 
 static VALUE sort(VALUE self, VALUE statsr_data) {
   int len = RARRAY_LEN(statsr_data);
-  time_sort(0, len - 1, statsr_data);
+  VALUE statsr_key_ts = rb_str_intern(rb_str_new2("ts"));
+  time_sort(0, len - 1, statsr_data, statsr_key_ts);
   return statsr_data;
 }
 
