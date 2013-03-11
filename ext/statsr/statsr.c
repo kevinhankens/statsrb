@@ -51,16 +51,16 @@ static VALUE query(VALUE self, VALUE logfile, VALUE query_ns, int query_limit) {
       // @TODO this should something more robust than atoi.
       int statsr_ts = atoi(strtok(line, "\t"));
       // @TODO this should probably use the actual namespace if we do wildcard queries.
-      //VALUE statsr_str_ns = rb_str_new2(strtok(NULL, "\t"));
-      strtok(NULL, "\t");
+      VALUE statsr_str_ns = rb_str_new2(strtok(NULL, "\t"));
+      //strtok(NULL, "\t");
       int statsr_v = atoi(strtok(NULL, "\0"));
 
       // @TODO this should really query the namespace exactly instead of just relying on strstr.
       //if (rb_str_cmp(query_ns, statsr_str_empty) == 0 || rb_str_cmp(query_ns, statsr_str_ns) == 0) {
       if (statsr_ts && statsr_v) {
         rb_hash_aset(statsr_event, statsr_key_ts, INT2NUM(statsr_ts));
-        //rb_hash_aset(statsr_event, statsr_key_ns, statsr_str_ns);
-        rb_hash_aset(statsr_event, statsr_key_ns, query_ns);
+        rb_hash_aset(statsr_event, statsr_key_ns, statsr_str_ns);
+        //rb_hash_aset(statsr_event, statsr_key_ns, query_ns);
         rb_hash_aset(statsr_event, statsr_key_v, INT2NUM(statsr_v));
         rb_ary_push(statsr_data, statsr_event);
         count++;
@@ -72,6 +72,58 @@ static VALUE query(VALUE self, VALUE logfile, VALUE query_ns, int query_limit) {
   fclose (file);
   free (line);
 
+  // @TODO qsort using rb_hash_aref(statsr_event, statsr_key_ts) to get the timestamp value.
+
+  return statsr_data;
+}
+
+/**
+ * Implementation of quicksort algorithm.
+ */
+void time_sort(int left, int right, VALUE ary) {
+  if (RARRAY_LEN(ary) < 2) {
+    return;
+  }
+
+  VALUE statsr_key_ts = rb_str_intern(rb_str_new2("ts"));
+
+  int i = left;
+  int j = right;
+  int p = (i + j) / 2;
+  int pv = NUM2INT(rb_hash_aref(rb_ary_entry(ary, p), statsr_key_ts));
+  int iv = NUM2INT(rb_hash_aref(rb_ary_entry(ary, i), statsr_key_ts));
+  int jv = NUM2INT(rb_hash_aref(rb_ary_entry(ary, j), statsr_key_ts));
+  VALUE tmp;
+
+  while (i <= j) {
+    while (iv < pv) {
+      i++;
+      iv = NUM2INT(rb_hash_aref(rb_ary_entry(ary, i), statsr_key_ts));
+    }
+    while (jv > pv) {
+      j--;
+      jv = NUM2INT(rb_hash_aref(rb_ary_entry(ary, j), statsr_key_ts));
+    }
+    if (i <= j) {
+      tmp = rb_hash_aref(rb_ary_entry(ary, i), statsr_key_ts);
+      rb_hash_aset(rb_ary_entry(ary, i), statsr_key_ts, rb_hash_aref(rb_ary_entry(ary, j), statsr_key_ts ));
+      rb_hash_aset(rb_ary_entry(ary, j), statsr_key_ts, tmp);
+      i++;
+      j--;
+    }
+  }
+
+  if (left < j) {
+    time_sort(left, j, ary);
+  }
+  if (i < right) {
+    time_sort(i, right, ary);
+  }
+}
+
+static VALUE sort(VALUE self, VALUE statsr_data) {
+  int len = RARRAY_LEN(statsr_data);
+  time_sort(0, len - 1, statsr_data);
   return statsr_data;
 }
 
@@ -83,4 +135,5 @@ void Init_statsr(void) {
 
   // Sets up the data
   rb_define_singleton_method(klass, "query", query, 3);
+  rb_define_singleton_method(klass, "sort", sort, 1);
 }

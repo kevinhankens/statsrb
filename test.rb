@@ -20,6 +20,10 @@ pp s[s.length - 1]
 
 time_gem = Time.now.to_f
 
+Statsr.sort s;
+
+time_sort = Time.now.to_f
+
 puts "TICKS"
 
 ss = []
@@ -38,7 +42,14 @@ pp ss[ss.length - 1]
 
 time_tick = Time.now.to_f
 
+
+total_time_sort = time_sort - time_gem
+total_time_query = time_gem - time_require
+
 puts "Require: #{time_require - time_start}"
-puts "Query: #{time_gem - time_require}"
-puts "Ticks: #{time_tick - time_gem}"
+puts "Query: #{total_time_query}"
+puts "Sort: #{total_time_sort}"
+puts "Q+S: #{total_time_query + total_time_sort}"
+puts "Ticks: #{time_tick - time_sort}"
 puts "Total: #{time_tick - time_start}"
+
