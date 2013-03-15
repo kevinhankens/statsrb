@@ -9,26 +9,28 @@ time_require = Time.now.to_f
 
 puts "GEM"
 
-s = Statsr.query "/var/log/statstest.log", ARGV[0], ARGV[1].to_f
-puts s.length
-pp s[0]
-pp s[1]
-pp s[2]
-pp s[s.length - 3]
-pp s[s.length - 2]
-pp s[s.length - 1]
+s = Statsr.new
+s.query "/var/log/statstest.log", ARGV[0], ARGV[1].to_f
+puts s.data.length
+
+pp s.data[0]
+pp s.data[1]
+pp s.data[2]
+pp s.data[s.data.length - 3]
+pp s.data[s.data.length - 2]
+pp s.data[s.data.length - 1]
 
 time_gem = Time.now.to_f
 
-Statsr.sort s;
+s.sort;
 
-puts s.length
-pp s[0]
-pp s[1]
-pp s[2]
-pp s[s.length - 3]
-pp s[s.length - 2]
-pp s[s.length - 1]
+puts s.data.length
+pp s.data[0]
+pp s.data[1]
+pp s.data[2]
+pp s.data[s.data.length - 3]
+pp s.data[s.data.length - 2]
+pp s.data[s.data.length - 1]
 
 time_sort = Time.now.to_f
 

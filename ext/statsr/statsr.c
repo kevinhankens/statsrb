@@ -3,7 +3,7 @@
 #include <string.h>
 #include <stdlib.h>
 
-static VALUE query(VALUE self, VALUE logfile, VALUE query_ns, int query_limit) {
+static VALUE statsr_query(VALUE self, VALUE logfile, VALUE query_ns, int query_limit) {
   // File pointer.
   FILE * file;
   // File line max length.
@@ -23,7 +23,9 @@ static VALUE query(VALUE self, VALUE logfile, VALUE query_ns, int query_limit) {
   int limit = NUM2INT(query_limit);
 
   // Return array instantiation.
-  VALUE statsr_data = rb_ary_new();
+  VALUE statsr_data = rb_iv_get(self, "@data");
+  // @TODO does this garbage collect all of the old hash data?
+  rb_ary_resize(statsr_data, 0);
 
   file = fopen (filepath, "r");
   if (file==NULL) {
@@ -57,7 +59,7 @@ static VALUE query(VALUE self, VALUE logfile, VALUE query_ns, int query_limit) {
 
       // @TODO this should really query the namespace exactly instead of just relying on strstr.
       //if (rb_str_cmp(query_ns, statsr_str_empty) == 0 || rb_str_cmp(query_ns, statsr_str_ns) == 0) {
-      if (statsr_ts && statsr_v) {
+      if (statsr_ts && (statsr_v || statsr_v == 0)) {
         rb_hash_aset(statsr_event, statsr_key_ts, INT2NUM(statsr_ts));
         rb_hash_aset(statsr_event, statsr_key_ns, statsr_str_ns);
         //rb_hash_aset(statsr_event, statsr_key_ns, query_ns);
@@ -72,9 +74,10 @@ static VALUE query(VALUE self, VALUE logfile, VALUE query_ns, int query_limit) {
   fclose (file);
   free (line);
 
-  // @TODO qsort using rb_hash_aref(statsr_event, statsr_key_ts) to get the timestamp value.
+  //return statsr_data;
+  //rb_iv_set(self, "@data", statsr_data);
 
-  return statsr_data;
+  return self;
 }
 
 /**
@@ -111,20 +114,31 @@ void time_sort(int left, int right, VALUE ary, VALUE statsr_key_ts) {
   }
 }
 
-static VALUE sort(VALUE self, VALUE statsr_data) {
+static VALUE statsr_sort(VALUE self) {
+  VALUE statsr_data = rb_iv_get(self, "@data");
   int len = RARRAY_LEN(statsr_data);
   VALUE statsr_key_ts = rb_str_intern(rb_str_new2("ts"));
   time_sort(0, len - 1, statsr_data, statsr_key_ts);
   return statsr_data;
 }
 
+/**
+ * Class constructor, sets up an instance variable.
+ */
+static VALUE statsr_constructor(VALUE self) {
+  VALUE statsr_data = rb_ary_new();
+  rb_iv_set(self, "@data", statsr_data);
+  return self;
+}
+
 /* ruby calls this to load the extension */
 void Init_statsr(void) {
-  /* assume we haven't yet defined Hola */
-  VALUE klass = rb_define_class("Statsr",
-      rb_cObject);
+  VALUE klass = rb_define_class("Statsr", rb_cObject);
 
-  // Sets up the data
-  rb_define_singleton_method(klass, "query", query, 3);
-  rb_define_singleton_method(klass, "sort", sort, 1);
+  rb_define_method(klass, "initialize", statsr_constructor, 0);
+  rb_define_method(klass, "query", statsr_query, 3);
+  rb_define_method(klass, "sort", statsr_sort, 0);
+  // Define :attr_accessor (read/write instance var)
+  // Note that this must correspond with a call to rb_iv_self() and it's string name must be @data.
+  rb_define_attr(klass, "data", 1, 1);
 }
