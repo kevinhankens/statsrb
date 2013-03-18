@@ -4,6 +4,7 @@ time_start = Time.now.to_f
 
 require 'statsr'
 require 'pp'
+require 'json'
 
 time_require = Time.now.to_f
 
@@ -11,7 +12,12 @@ puts "GEM"
 
 s = Statsr.new
 s.query "/var/log/statstest.log", ARGV[0], ARGV[1].to_f
-puts s.data.length
+s.sort
+s.write "/home/khankens/ktest.log"
+
+abort
+
+#puts s.data.to_json
 
 pp s.data[0]
 pp s.data[1]

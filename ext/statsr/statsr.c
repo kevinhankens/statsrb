@@ -123,11 +123,50 @@ static VALUE statsr_sort(VALUE self) {
 }
 
 /**
+ * Write the in-memory data to a file.
+ */
+static VALUE statsr_write(VALUE self, VALUE logfile) {
+  FILE * file;
+  const char *filepath = RSTRING_PTR(logfile);
+  VALUE statsr_data = rb_iv_get(self, "@data");
+  int data_length = RARRAY_LEN(statsr_data);
+  int i;
+  int line_size = 256;
+  int tmp_ts, tmp_v;
+  const char *tmp_ns = (char *) malloc(line_size);
+  
+  // Create symbols by passing ruby strings into rb_str_intern.
+  VALUE statsr_key_ts = rb_str_intern(rb_str_new2("ts"));
+  VALUE statsr_key_ns = rb_str_intern(rb_str_new2("ns"));
+  VALUE statsr_key_v = rb_str_intern(rb_str_new2("v"));
+
+  file = fopen (filepath, "w+");
+  if (file==NULL) {
+    fputs ("File error",stderr);
+    exit (1);
+  }
+
+  // Iterate through the data array, writing the data as we go.
+  for (i = 0; i < data_length; i++) {
+    //VALUE tmp_line = rb_str_tmp_new(line_size);
+    tmp_ts = NUM2INT(rb_hash_aref(rb_ary_entry(statsr_data, i), statsr_key_ts));
+    tmp_ns = RSTRING_PTR(rb_hash_aref(rb_ary_entry(statsr_data, i), statsr_key_ns));
+    tmp_v = NUM2INT(rb_hash_aref(rb_ary_entry(statsr_data, i), statsr_key_v));
+    fprintf(file, "%d\t%s\t%d\n", tmp_ts, tmp_ns, tmp_v);
+    //rb_str_free(tmp_line);
+  }
+
+  fclose (file);
+  return self;
+}
+
+/**
  * Class constructor, sets up an instance variable.
  */
 static VALUE statsr_constructor(VALUE self) {
   VALUE statsr_data = rb_ary_new();
   rb_iv_set(self, "@data", statsr_data);
+
   return self;
 }
 
@@ -138,6 +177,7 @@ void Init_statsr(void) {
   rb_define_method(klass, "initialize", statsr_constructor, 0);
   rb_define_method(klass, "query", statsr_query, 3);
   rb_define_method(klass, "sort", statsr_sort, 0);
+  rb_define_method(klass, "write", statsr_write, 1);
   // Define :attr_accessor (read/write instance var)
   // Note that this must correspond with a call to rb_iv_self() and it's string name must be @data.
   rb_define_attr(klass, "data", 1, 1);
