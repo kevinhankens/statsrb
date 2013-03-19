@@ -125,9 +125,10 @@ static VALUE statsr_sort(VALUE self) {
 /**
  * Write the in-memory data to a file.
  */
-static VALUE statsr_write(VALUE self, VALUE logfile) {
+static VALUE statsr_write(VALUE self, VALUE logfile, VALUE mode) {
   FILE * file;
   const char *filepath = RSTRING_PTR(logfile);
+  const char *filemode = RSTRING_PTR(mode);
   VALUE statsr_data = rb_iv_get(self, "@data");
   int data_length = RARRAY_LEN(statsr_data);
   int i;
@@ -140,7 +141,7 @@ static VALUE statsr_write(VALUE self, VALUE logfile) {
   VALUE statsr_key_ns = rb_str_intern(rb_str_new2("ns"));
   VALUE statsr_key_v = rb_str_intern(rb_str_new2("v"));
 
-  file = fopen (filepath, "w+");
+  file = fopen (filepath, filemode);
   if (file==NULL) {
     fputs ("File error",stderr);
     exit (1);
@@ -148,6 +149,7 @@ static VALUE statsr_write(VALUE self, VALUE logfile) {
 
   // Iterate through the data array, writing the data as we go.
   for (i = 0; i < data_length; i++) {
+    // @TODO make sure that these values are not empty before writing.
     //VALUE tmp_line = rb_str_tmp_new(line_size);
     tmp_ts = NUM2INT(rb_hash_aref(rb_ary_entry(statsr_data, i), statsr_key_ts));
     tmp_ns = RSTRING_PTR(rb_hash_aref(rb_ary_entry(statsr_data, i), statsr_key_ns));
@@ -161,7 +163,52 @@ static VALUE statsr_write(VALUE self, VALUE logfile) {
 }
 
 /**
+ * A method that is compatible with the rack api.
+ * @TODO can we keep these in shared memory somehow and write in batches?
+ */
+static VALUE statsr_rack_call(VALUE self, VALUE env) {
+  VALUE response = rb_ary_new();
+  VALUE headers = rb_hash_new();
+  VALUE body = rb_ary_new();
+  VALUE statsr_data = rb_iv_get(self, "@data");
+  VALUE statsr_hash = rb_hash_new();
+
+  // Create symbols by passing ruby strings into rb_str_intern.
+  VALUE statsr_key_ts = rb_str_intern(rb_str_new2("ts"));
+  VALUE statsr_key_ns = rb_str_intern(rb_str_new2("ns"));
+  VALUE statsr_key_v = rb_str_intern(rb_str_new2("v"));
+
+  char *qs = RSTRING_PTR(rb_hash_aref(env, rb_str_new2("PATH_INFO")));
+
+  rb_hash_aset(headers, rb_str_new2("Content-Type"), rb_str_new2("text/html"));
+
+  // Remove the leading / and parse the relevant data.
+  qs++;
+  int statsr_ts = atoi(strtok(qs, "/"));
+  VALUE statsr_str_ns = rb_str_new2(strtok(NULL, "/"));
+  int statsr_v = atoi(strtok(NULL, "/\0"));
+
+  // @TODO check for incorrect url format.
+  rb_hash_aset(statsr_hash, statsr_key_ts, INT2NUM(statsr_ts));
+  rb_hash_aset(statsr_hash, statsr_key_ns, statsr_str_ns);
+  rb_hash_aset(statsr_hash, statsr_key_v, INT2NUM(statsr_v));
+  rb_ary_push(statsr_data, statsr_hash);
+
+  // @TODO move the log file to rack config.
+  statsr_write(self, rb_str_new2("/tmp/ktest.log"), rb_str_new2("a+"));
+
+  rb_ary_push(body, statsr_str_ns);
+
+  rb_ary_push(response, INT2NUM(200));
+  rb_ary_push(response, headers);
+  rb_ary_push(response, body);
+
+  return response;
+}
+
+/**
  * Class constructor, sets up an instance variable.
+ * @TODO move symbol defs to constructor.
  */
 static VALUE statsr_constructor(VALUE self) {
   VALUE statsr_data = rb_ary_new();
@@ -177,7 +224,8 @@ void Init_statsr(void) {
   rb_define_method(klass, "initialize", statsr_constructor, 0);
   rb_define_method(klass, "query", statsr_query, 3);
   rb_define_method(klass, "sort", statsr_sort, 0);
-  rb_define_method(klass, "write", statsr_write, 1);
+  rb_define_method(klass, "write", statsr_write, 2);
+  rb_define_method(klass, "call", statsr_rack_call, 1);
   // Define :attr_accessor (read/write instance var)
   // Note that this must correspond with a call to rb_iv_self() and it's string name must be @data.
   rb_define_attr(klass, "data", 1, 1);

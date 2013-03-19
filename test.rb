@@ -13,7 +13,10 @@ puts "GEM"
 s = Statsr.new
 s.query "/var/log/statstest.log", ARGV[0], ARGV[1].to_f
 s.sort
-s.write "/home/khankens/ktest.log"
+s.write "/home/khankens/ktest.log", "w+"
+h= {:ts => Time.now.to_i, :ns => "kevin", :v => 33}
+s.data.push h
+s.write "/home/khankens/ktest.log", "a"
 
 abort
 
