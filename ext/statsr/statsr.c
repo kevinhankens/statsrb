@@ -182,22 +182,33 @@ static VALUE statsr_rack_call(VALUE self, VALUE env) {
 
   rb_hash_aset(headers, rb_str_new2("Content-Type"), rb_str_new2("text/html"));
 
-  // Remove the leading / and parse the relevant data.
-  qs++;
-  int statsr_ts = atoi(strtok(qs, "/"));
-  VALUE statsr_str_ns = rb_str_new2(strtok(NULL, "/"));
-  int statsr_v = atoi(strtok(NULL, "/\0"));
+  const char *method = RSTRING_PTR(rb_hash_aref(env, rb_str_new2("REQUEST_METHOD")));
+  const char *method_get = "GET";
+  if (strcmp(method, method_get) == 0) {
+    // Remove the leading / and parse the relevant data.
+    qs++;
+    long int statsr_ts = atoi(strtok(qs, "/"));
+    if (statsr_ts == 0) {
+      statsr_ts = (long int)time(NULL);
+    }
+    VALUE statsr_str_ns = rb_str_new2(strtok(NULL, "/"));
+    int statsr_v = atoi(strtok(NULL, "/\0"));
 
-  // @TODO check for incorrect url format.
-  rb_hash_aset(statsr_hash, statsr_key_ts, INT2NUM(statsr_ts));
-  rb_hash_aset(statsr_hash, statsr_key_ns, statsr_str_ns);
-  rb_hash_aset(statsr_hash, statsr_key_v, INT2NUM(statsr_v));
-  rb_ary_push(statsr_data, statsr_hash);
+    // @TODO check for incorrect url format.
+    rb_hash_aset(statsr_hash, statsr_key_ts, INT2NUM(statsr_ts));
+    rb_hash_aset(statsr_hash, statsr_key_ns, statsr_str_ns);
+    rb_hash_aset(statsr_hash, statsr_key_v, INT2NUM(statsr_v));
+    rb_ary_push(statsr_data, statsr_hash);
 
-  // @TODO move the log file to rack config.
-  statsr_write(self, rb_str_new2("/tmp/ktest.log"), rb_str_new2("a+"));
+    // @TODO move the log file to rack config.
+    int data_length = RARRAY_LEN(statsr_data);
+    if (data_length > 9) {
+      statsr_write(self, rb_str_new2("/tmp/ktest.log"), rb_str_new2("a+"));
+      rb_ary_resize(statsr_data, 0);
+    }
 
-  rb_ary_push(body, statsr_str_ns);
+    rb_ary_push(body, statsr_str_ns);
+  }
 
   rb_ary_push(response, INT2NUM(200));
   rb_ary_push(response, headers);
