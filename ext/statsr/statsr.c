@@ -3,7 +3,7 @@
 #include <string.h>
 #include <stdlib.h>
 
-static VALUE statsr_query(VALUE self, VALUE logfile, VALUE query_ns, int query_limit) {
+static VALUE statsr_query(VALUE self, VALUE logfile, VALUE query_ns, VALUE query_limit, VALUE query_start, VALUE query_end) {
   // File pointer.
   FILE * file;
   // File line max length.
@@ -21,6 +21,8 @@ static VALUE statsr_query(VALUE self, VALUE logfile, VALUE query_ns, int query_l
 
   // Convert into an int that ruby understands.
   int limit = NUM2INT(query_limit);
+  int qstart = NUM2INT(query_start);
+  int qend = NUM2INT(query_end);
 
   // Return array instantiation.
   VALUE statsr_data = rb_iv_get(self, "@data");
@@ -52,20 +54,23 @@ static VALUE statsr_query(VALUE self, VALUE logfile, VALUE query_ns, int query_l
 
       // @TODO this should something more robust than atoi.
       int statsr_ts = atoi(strtok(line, "\t"));
-      // @TODO this should probably use the actual namespace if we do wildcard queries.
-      VALUE statsr_str_ns = rb_str_new2(strtok(NULL, "\t"));
-      //strtok(NULL, "\t");
-      int statsr_v = atoi(strtok(NULL, "\0"));
 
-      // @TODO this should really query the namespace exactly instead of just relying on strstr.
-      //if (rb_str_cmp(query_ns, statsr_str_empty) == 0 || rb_str_cmp(query_ns, statsr_str_ns) == 0) {
-      if (statsr_ts && (statsr_v || statsr_v == 0)) {
-        rb_hash_aset(statsr_event, statsr_key_ts, INT2NUM(statsr_ts));
-        rb_hash_aset(statsr_event, statsr_key_ns, statsr_str_ns);
-        //rb_hash_aset(statsr_event, statsr_key_ns, query_ns);
-        rb_hash_aset(statsr_event, statsr_key_v, INT2NUM(statsr_v));
-        rb_ary_push(statsr_data, statsr_event);
-        count++;
+      if ((qstart == 0 || statsr_ts >= qstart) && (qend == 0 || statsr_ts <= qend)) {
+        // @TODO this should probably use the actual namespace if we do wildcard queries.
+        VALUE statsr_str_ns = rb_str_new2(strtok(NULL, "\t"));
+        //strtok(NULL, "\t");
+        int statsr_v = atoi(strtok(NULL, "\0"));
+  
+        // @TODO this should really query the namespace exactly instead of just relying on strstr.
+        //if (rb_str_cmp(query_ns, statsr_str_empty) == 0 || rb_str_cmp(query_ns, statsr_str_ns) == 0) {
+        if (statsr_ts && (statsr_v || statsr_v == 0)) {
+          rb_hash_aset(statsr_event, statsr_key_ts, INT2NUM(statsr_ts));
+          rb_hash_aset(statsr_event, statsr_key_ns, statsr_str_ns);
+          //rb_hash_aset(statsr_event, statsr_key_ns, query_ns);
+          rb_hash_aset(statsr_event, statsr_key_v, INT2NUM(statsr_v));
+          rb_ary_push(statsr_data, statsr_event);
+          count++;
+        }
       }
     }
   }
@@ -203,6 +208,7 @@ static VALUE statsr_rack_call(VALUE self, VALUE env) {
     // @TODO move the log file to rack config.
     int data_length = RARRAY_LEN(statsr_data);
     if (data_length > 9) {
+      statsr_sort(self);
       statsr_write(self, rb_str_new2("/tmp/ktest.log"), rb_str_new2("a+"));
       rb_ary_resize(statsr_data, 0);
     }
@@ -233,7 +239,7 @@ void Init_statsr(void) {
   VALUE klass = rb_define_class("Statsr", rb_cObject);
 
   rb_define_method(klass, "initialize", statsr_constructor, 0);
-  rb_define_method(klass, "query", statsr_query, 3);
+  rb_define_method(klass, "query", statsr_query, 5);
   rb_define_method(klass, "sort", statsr_sort, 0);
   rb_define_method(klass, "write", statsr_write, 2);
   rb_define_method(klass, "call", statsr_rack_call, 1);
