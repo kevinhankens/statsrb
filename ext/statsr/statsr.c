@@ -187,33 +187,83 @@ static VALUE statsr_rack_call(VALUE self, VALUE env) {
 
   rb_hash_aset(headers, rb_str_new2("Content-Type"), rb_str_new2("text/html"));
 
-  const char *method = RSTRING_PTR(rb_hash_aref(env, rb_str_new2("REQUEST_METHOD")));
+  //const char *method = RSTRING_PTR(rb_hash_aref(env, rb_str_new2("REQUEST_METHOD")));
   const char *method_get = "GET";
-  if (strcmp(method, method_get) == 0) {
-    // Remove the leading / and parse the relevant data.
-    qs++;
-    long int statsr_ts = atoi(strtok(qs, "/"));
+  const char *method_put = "PUT";
+  // Remove the leading /
+  qs++;
+  const char *method = strtok(qs, "/\0");
+  if (method && strcmp(method, method_put) == 0) {
+    const char * statsr_str_ts = strtok(NULL, "/\0");
+    long int statsr_ts = (statsr_str_ts) ? atoi(statsr_str_ts) : 0;
     if (statsr_ts == 0) {
       statsr_ts = (long int)time(NULL);
     }
-    VALUE statsr_str_ns = rb_str_new2(strtok(NULL, "/"));
-    int statsr_v = atoi(strtok(NULL, "/\0"));
+    const char * statsr_str_ns = strtok(NULL, "/\0");
+    if (statsr_str_ns) {
+      VALUE statsr_ns = rb_str_new2(statsr_str_ns);
+      const char * statsr_str_v = strtok(NULL, "/\0");
+      int statsr_v = (statsr_str_v ) ? atoi(statsr_str_v ) : 0;
 
-    // @TODO check for incorrect url format.
-    rb_hash_aset(statsr_hash, statsr_key_ts, INT2NUM(statsr_ts));
-    rb_hash_aset(statsr_hash, statsr_key_ns, statsr_str_ns);
-    rb_hash_aset(statsr_hash, statsr_key_v, INT2NUM(statsr_v));
-    rb_ary_push(statsr_data, statsr_hash);
+      // @TODO check for incorrect url format.
+      rb_hash_aset(statsr_hash, statsr_key_ts, INT2NUM(statsr_ts));
+      rb_hash_aset(statsr_hash, statsr_key_ns, statsr_ns);
+      rb_hash_aset(statsr_hash, statsr_key_v, INT2NUM(statsr_v));
+      rb_ary_push(statsr_data, statsr_hash);
 
-    // @TODO move the log file to rack config.
-    int data_length = RARRAY_LEN(statsr_data);
-    if (data_length > 9) {
-      statsr_sort(self);
-      statsr_write(self, rb_str_new2("/tmp/ktest.log"), rb_str_new2("a+"));
-      rb_ary_resize(statsr_data, 0);
+      // @TODO move the log file to rack config.
+      int data_length = RARRAY_LEN(statsr_data);
+      if (data_length > 9) {
+        statsr_sort(self);
+        statsr_write(self, rb_str_new2("/tmp/ktest.log"), rb_str_new2("a+"));
+        rb_ary_resize(statsr_data, 0);
+      }
+
+      rb_ary_push(body, statsr_ns);
     }
+  }
+  else if (method && strcmp(method, method_get) == 0) {
+    const char * statsr_str_ns = strtok(NULL, "/\0");
+    rb_ary_push(body, rb_str_new("[", 1));
 
-    rb_ary_push(body, statsr_str_ns);
+    // If they didn't specify a namespace, bail out immediately.
+    if (statsr_str_ns) {
+      VALUE statsr_ns = rb_str_new2(statsr_str_ns);
+      long int query_limit, query_start, query_end;
+      const char * query_limit_str = strtok(NULL, "/\0");
+      const char * query_start_str = strtok(NULL, "/\0");
+      const char * query_end_str = strtok(NULL, "/\0");
+      query_limit = (query_limit_str) ? atoi(query_limit_str) : 10;
+      query_start = (query_start_str) ? atoi(query_start_str) : 0;
+      query_end = (query_end_str) ? atoi(query_end_str) : 0;
+
+      // Create a new Statsr object to query from.
+      VALUE tmp = rb_obj_dup(self);
+      statsr_query(tmp, rb_str_new2("/tmp/ktest.log"), statsr_ns, INT2NUM(query_limit), INT2NUM(query_start), INT2NUM(query_end));
+      statsr_sort(tmp);
+      VALUE tmp_data = rb_iv_get(tmp, "@data");
+
+      int data_length = RARRAY_LEN(tmp_data);
+      int i;
+   
+      for (i = 0; i < data_length; i++) {
+        rb_ary_push(body, rb_str_new("[", 1));
+        rb_ary_push(body, rb_obj_as_string(rb_hash_aref(rb_ary_entry(tmp_data, i), statsr_key_ts )));
+        rb_ary_push(body, rb_str_new(",'", 2));
+        rb_ary_push(body, rb_hash_aref(rb_ary_entry(tmp_data, i), statsr_key_ns ));
+        rb_ary_push(body, rb_str_new("',", 2));
+        rb_ary_push(body, rb_obj_as_string(rb_hash_aref(rb_ary_entry(tmp_data, i), statsr_key_v )));
+        rb_ary_push(body, rb_str_new("],\n", 3));
+      } 
+      rb_ary_resize(tmp_data, 0);
+    }
+    rb_ary_push(body, rb_str_new("]", 1));
+  }
+  else {
+    rb_ary_push(response, INT2NUM(404));
+    rb_ary_push(response, headers);
+    rb_ary_push(response, body);
+    return response;
   }
 
   rb_ary_push(response, INT2NUM(200));
