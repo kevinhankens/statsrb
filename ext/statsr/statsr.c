@@ -168,6 +168,46 @@ static VALUE statsr_write(VALUE self, VALUE logfile, VALUE mode) {
 }
 
 /**
+ * A method to split unique namespaces from internal memory and write them to individual files.
+ */
+static VALUE statsr_splitwrite(VALUE self, VALUE logdir, VALUE mode) {
+  VALUE statsr_data = rb_iv_get(self, "@data");
+  int len = RARRAY_LEN(statsr_data);
+  int i, ii, ns_len;
+
+  VALUE statsr_key_ts = rb_str_intern(rb_str_new2("ts"));
+  VALUE statsr_key_ns = rb_str_intern(rb_str_new2("ns"));
+  VALUE statsr_key_v = rb_str_intern(rb_str_new2("v"));
+
+  VALUE ns_list = rb_ary_new();
+
+  for (i = 0; i < len; i++) {
+    if (!rb_ary_includes(ns_list, rb_hash_aref(rb_ary_entry(statsr_data, i), statsr_key_ns))) {
+      rb_ary_push(ns_list, rb_hash_aref(rb_ary_entry(statsr_data, i), statsr_key_ns));
+    }
+  }
+
+  ns_len = RARRAY_LEN(ns_list);
+
+  for (i = 0; i < ns_len; i++) {
+    VALUE tmp = rb_obj_dup(self);
+    VALUE tmp_data = rb_ary_new();
+    for (ii = 0; ii < len; ii++) {
+      if (rb_str_cmp(rb_ary_entry(ns_list, i), rb_hash_aref(rb_ary_entry(statsr_data, ii), statsr_key_ns)) == 0) {
+        rb_ary_push(tmp_data, rb_ary_entry(statsr_data, ii));
+      }
+    }
+    //fputs (RSTRING_PTR(rb_obj_as_string(INT2NUM(RARRAY_LEN(tmp_data)))),stdout);
+    rb_iv_set(tmp, "@data", tmp_data);
+
+    // @todo, throw an exception if no trailing slash... or add one
+    statsr_write(tmp, rb_str_plus(logdir, rb_ary_entry(ns_list, i)), mode);
+  }
+
+  return self;
+}
+
+/**
  * A method that is compatible with the rack api.
  * @TODO can we keep these in shared memory somehow and write in batches?
  */
@@ -238,6 +278,7 @@ static VALUE statsr_rack_call(VALUE self, VALUE env) {
       query_end = (query_end_str) ? atoi(query_end_str) : 0;
 
       // Create a new Statsr object to query from.
+      // @todo we probably need to assign a new array to @data to avoid messing up the pointers.
       VALUE tmp = rb_obj_dup(self);
       statsr_query(tmp, rb_str_new2("/tmp/ktest.log"), statsr_ns, INT2NUM(query_limit), INT2NUM(query_start), INT2NUM(query_end));
       statsr_sort(tmp);
@@ -292,6 +333,7 @@ void Init_statsr(void) {
   rb_define_method(klass, "query", statsr_query, 5);
   rb_define_method(klass, "sort", statsr_sort, 0);
   rb_define_method(klass, "write", statsr_write, 2);
+  rb_define_method(klass, "splitwrite", statsr_splitwrite, 2);
   rb_define_method(klass, "call", statsr_rack_call, 1);
   // Define :attr_accessor (read/write instance var)
   // Note that this must correspond with a call to rb_iv_self() and it's string name must be @data.
