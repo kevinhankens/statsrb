@@ -8,6 +8,14 @@ require 'json'
 
 time_require = Time.now.to_f
 
+s = Statsr.new
+s.query "/tmp/statsr/craig", "craig", 10, 0, 0
+s.sort
+pp s.data
+
+
+abort
+
 puts "GEM"
 
 s = Statsr.new

@@ -103,9 +103,9 @@ void time_sort(int left, int right, VALUE ary, VALUE statsr_key_ts) {
       j--;
     }
     if (i <= j) {
-      tmp = rb_hash_aref(rb_ary_entry(ary, i), statsr_key_ts);
-      rb_hash_aset(rb_ary_entry(ary, i), statsr_key_ts, rb_hash_aref(rb_ary_entry(ary, j), statsr_key_ts ));
-      rb_hash_aset(rb_ary_entry(ary, j), statsr_key_ts, tmp);
+      tmp = rb_ary_entry(ary, i);
+      rb_ary_store(ary, i, rb_ary_entry(ary, j));
+      rb_ary_store(ary, j, tmp);
       i++;
       j--;
     }
@@ -170,7 +170,7 @@ static VALUE statsr_write(VALUE self, VALUE logfile, VALUE mode) {
 /**
  * A method to split unique namespaces from internal memory and write them to individual files.
  */
-static VALUE statsr_splitwrite(VALUE self, VALUE logdir, VALUE mode) {
+static VALUE statsr_split_write(VALUE self, VALUE logdir, VALUE mode) {
   VALUE statsr_data = rb_iv_get(self, "@data");
   int len = RARRAY_LEN(statsr_data);
   int i, ii, ns_len;
@@ -255,7 +255,7 @@ static VALUE statsr_rack_call(VALUE self, VALUE env) {
       int data_length = RARRAY_LEN(statsr_data);
       if (data_length > 9) {
         statsr_sort(self);
-        statsr_write(self, rb_str_new2("/tmp/ktest.log"), rb_str_new2("a+"));
+        statsr_split_write(self, rb_iv_get(self, "@split_file_dir"), rb_str_new2("a+"));
         rb_ary_resize(statsr_data, 0);
       }
 
@@ -280,9 +280,11 @@ static VALUE statsr_rack_call(VALUE self, VALUE env) {
       // Create a new Statsr object to query from.
       // @todo we probably need to assign a new array to @data to avoid messing up the pointers.
       VALUE tmp = rb_obj_dup(self);
-      statsr_query(tmp, rb_str_new2("/tmp/ktest.log"), statsr_ns, INT2NUM(query_limit), INT2NUM(query_start), INT2NUM(query_end));
+      VALUE tmp_data = rb_ary_new();
+      rb_iv_set(tmp, "@data", tmp_data);
+      statsr_query(tmp, rb_str_plus(rb_iv_get(self, "@split_file_dir"), statsr_ns), statsr_ns, INT2NUM(query_limit), INT2NUM(query_start), INT2NUM(query_end));
       statsr_sort(tmp);
-      VALUE tmp_data = rb_iv_get(tmp, "@data");
+      //VALUE tmp_data = rb_iv_get(tmp, "@data");
 
       int data_length = RARRAY_LEN(tmp_data);
       int i;
@@ -321,6 +323,8 @@ static VALUE statsr_rack_call(VALUE self, VALUE env) {
 static VALUE statsr_constructor(VALUE self) {
   VALUE statsr_data = rb_ary_new();
   rb_iv_set(self, "@data", statsr_data);
+  VALUE statsr_split_file_dir = rb_str_new("/tmp", 4);
+  rb_iv_set(self, "@split_file_dir", statsr_split_file_dir);
 
   return self;
 }
@@ -333,9 +337,10 @@ void Init_statsr(void) {
   rb_define_method(klass, "query", statsr_query, 5);
   rb_define_method(klass, "sort", statsr_sort, 0);
   rb_define_method(klass, "write", statsr_write, 2);
-  rb_define_method(klass, "splitwrite", statsr_splitwrite, 2);
+  rb_define_method(klass, "splitwrite", statsr_split_write, 2);
   rb_define_method(klass, "call", statsr_rack_call, 1);
   // Define :attr_accessor (read/write instance var)
   // Note that this must correspond with a call to rb_iv_self() and it's string name must be @data.
   rb_define_attr(klass, "data", 1, 1);
+  rb_define_attr(klass, "split_file_dir", 1, 1);
 }
