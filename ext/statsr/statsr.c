@@ -223,16 +223,39 @@ static VALUE statsr_rack_call(VALUE self, VALUE env) {
   VALUE statsr_key_ns = rb_str_intern(rb_str_new2("ns"));
   VALUE statsr_key_v = rb_str_intern(rb_str_new2("v"));
 
-  char *qs = RSTRING_PTR(rb_hash_aref(env, rb_str_new2("PATH_INFO")));
+  char *path = RSTRING_PTR(rb_hash_aref(env, rb_str_new2("PATH_INFO")));
 
-  rb_hash_aset(headers, rb_str_new2("Content-Type"), rb_str_new2("text/html"));
+  rb_hash_aset(headers, rb_str_new2("Content-Type"), rb_str_new2("text/json"));
+
+  // Parse the query string
+  char *qs = RSTRING_PTR(rb_hash_aref(env, rb_str_new2("QUERY_STRING")));
+  char *qsk, *qsv;
+  VALUE query_string_tmp = rb_ary_new();
+  VALUE query_string = rb_hash_new();
+  qsk = strtok(qs, "&\0");
+  while (qsk != NULL) {
+    rb_ary_push(query_string_tmp, rb_str_new2(qsk));
+    qsk = strtok(NULL, "&\0");
+  }
+  int qslen = RARRAY_LEN(query_string_tmp);
+  int qsi;
+  for (qsi = 0; qsi < qslen; qsi++) {
+    qsk = strtok(RSTRING_PTR(rb_ary_entry(query_string_tmp, qsi)), "=\0");
+    qsv = strtok(NULL, "\0");
+    if (qsv != NULL) {
+      rb_hash_aset(query_string, rb_str_new2(qsk), rb_str_new2(qsv));
+    }
+    else if(qsk != NULL && qsv != NULL) {
+      rb_hash_aset(query_string, rb_str_new2(qsk), rb_str_new2(""));
+    }
+  }
 
   //const char *method = RSTRING_PTR(rb_hash_aref(env, rb_str_new2("REQUEST_METHOD")));
   const char *method_get = "GET";
   const char *method_put = "PUT";
   // Remove the leading /
-  qs++;
-  const char *method = strtok(qs, "/\0");
+  path++;
+  const char *method = strtok(path, "/\0");
   if (method && strcmp(method, method_put) == 0) {
     const char * statsr_str_ts = strtok(NULL, "/\0");
     long int statsr_ts = (statsr_str_ts) ? atoi(statsr_str_ts) : 0;
@@ -253,7 +276,9 @@ static VALUE statsr_rack_call(VALUE self, VALUE env) {
 
       // @TODO move the log file to rack config.
       int data_length = RARRAY_LEN(statsr_data);
+      rb_ary_push(body, rb_obj_as_string(INT2NUM(RARRAY_LEN(statsr_data))));
       if (data_length > 9) {
+      rb_ary_push(body, rb_str_new2("split"));
         statsr_sort(self);
         statsr_split_write(self, rb_iv_get(self, "@split_file_dir"), rb_str_new2("a+"));
         rb_ary_resize(statsr_data, 0);
@@ -264,7 +289,11 @@ static VALUE statsr_rack_call(VALUE self, VALUE env) {
   }
   else if (method && strcmp(method, method_get) == 0) {
     const char * statsr_str_ns = strtok(NULL, "/\0");
-    rb_ary_push(body, rb_str_new("[", 1));
+    VALUE jsoncallback = rb_hash_aref(query_string, rb_str_new("jsoncallback", 12));
+    if (jsoncallback != Qnil) {
+      rb_ary_push(body, rb_str_plus(jsoncallback, rb_str_new("(", 1)));
+    }
+    rb_ary_push(body, rb_str_new("{\"data\":[", 9));
 
     // If they didn't specify a namespace, bail out immediately.
     if (statsr_str_ns) {
@@ -296,11 +325,20 @@ static VALUE statsr_rack_call(VALUE self, VALUE env) {
         rb_ary_push(body, rb_hash_aref(rb_ary_entry(tmp_data, i), statsr_key_ns ));
         rb_ary_push(body, rb_str_new("',", 2));
         rb_ary_push(body, rb_obj_as_string(rb_hash_aref(rb_ary_entry(tmp_data, i), statsr_key_v )));
-        rb_ary_push(body, rb_str_new("],\n", 3));
+        rb_ary_push(body, rb_str_new("]", 1));
+        if (i < data_length - 1) {
+          rb_ary_push(body, rb_str_new(",", 1));
+        }
+        rb_ary_push(body, rb_str_new("\n", 1));
       } 
       rb_ary_resize(tmp_data, 0);
     }
-    rb_ary_push(body, rb_str_new("]", 1));
+    if (jsoncallback != Qnil) {
+      rb_ary_push(body, rb_str_new("]})", 3));
+    }
+    else {
+      rb_ary_push(body, rb_str_new("}", 1));
+    }
   }
   else {
     rb_ary_push(response, INT2NUM(404));
@@ -337,7 +375,7 @@ void Init_statsr(void) {
   rb_define_method(klass, "query", statsr_query, 5);
   rb_define_method(klass, "sort", statsr_sort, 0);
   rb_define_method(klass, "write", statsr_write, 2);
-  rb_define_method(klass, "splitwrite", statsr_split_write, 2);
+  rb_define_method(klass, "split_write", statsr_split_write, 2);
   rb_define_method(klass, "call", statsr_rack_call, 1);
   // Define :attr_accessor (read/write instance var)
   // Note that this must correspond with a call to rb_iv_self() and it's string name must be @data.
