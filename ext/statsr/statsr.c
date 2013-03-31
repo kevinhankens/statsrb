@@ -55,7 +55,7 @@ static VALUE statsr_query(VALUE self, VALUE logfile, VALUE query_ns, VALUE query
       // @TODO this should something more robust than atoi.
       int statsr_ts = atoi(strtok(line, "\t"));
 
-      if ((qstart == 0 || statsr_ts >= qstart) && (qend == 0 || statsr_ts <= qend)) {
+      if (statsr_ts != NULL && (qstart == 0 || statsr_ts >= qstart) && (qend == 0 || statsr_ts <= qend)) {
         // @TODO this should probably use the actual namespace if we do wildcard queries.
         VALUE statsr_str_ns = rb_str_new2(strtok(NULL, "\t"));
         //strtok(NULL, "\t");
@@ -119,11 +119,16 @@ void time_sort(int left, int right, VALUE ary, VALUE statsr_key_ts) {
   }
 }
 
+/**
+ * Sort the internal data using a quicksort algorithm based on the hash element's timestamp.
+ */
 static VALUE statsr_sort(VALUE self) {
   VALUE statsr_data = rb_iv_get(self, "@data");
   int len = RARRAY_LEN(statsr_data);
-  VALUE statsr_key_ts = rb_str_intern(rb_str_new2("ts"));
-  time_sort(0, len - 1, statsr_data, statsr_key_ts);
+  if (len > 0) {
+    VALUE statsr_key_ts = rb_str_intern(rb_str_new2("ts"));
+    time_sort(0, len - 1, statsr_data, statsr_key_ts);
+  }
   return statsr_data;
 }
 
@@ -197,7 +202,7 @@ static VALUE statsr_split_write(VALUE self, VALUE logdir, VALUE mode) {
         rb_ary_push(tmp_data, rb_ary_entry(statsr_data, ii));
       }
     }
-    //fputs (RSTRING_PTR(rb_obj_as_string(INT2NUM(RARRAY_LEN(tmp_data)))),stdout);
+    //fputs (RSTRING_PTR(rb_obj_as_string(INT2NUM(RARRAY_LEN(tmp_data)))),stderr);
     rb_iv_set(tmp, "@data", tmp_data);
 
     // @todo, throw an exception if no trailing slash... or add one
@@ -299,12 +304,36 @@ static VALUE statsr_rack_call(VALUE self, VALUE env) {
     if (statsr_str_ns) {
       VALUE statsr_ns = rb_str_new2(statsr_str_ns);
       long int query_limit, query_start, query_end;
-      const char * query_limit_str = strtok(NULL, "/\0");
-      const char * query_start_str = strtok(NULL, "/\0");
-      const char * query_end_str = strtok(NULL, "/\0");
-      query_limit = (query_limit_str) ? atoi(query_limit_str) : 10;
-      query_start = (query_start_str) ? atoi(query_start_str) : 0;
-      query_end = (query_end_str) ? atoi(query_end_str) : 0;
+
+      // Get the query limit.
+      query_limit = 100;
+      VALUE query_limit_qs = rb_hash_aref(query_string, rb_str_new("limit", 5));
+      if (query_limit_qs != Qnil) {
+        query_limit = atoi(RSTRING_PTR(query_limit_qs));
+      }
+
+      // Get the query start.
+      query_start = 0;
+      VALUE query_start_qs = rb_hash_aref(query_string, rb_str_new("start", 5));
+      if (query_start_qs != Qnil) {
+        query_start = atoi(RSTRING_PTR(query_start_qs));
+      }
+
+      // Get the query end.
+      query_end = 0;
+      VALUE query_end_qs = rb_hash_aref(query_string, rb_str_new("end", 3));
+      if (query_end_qs != Qnil) {
+        query_end = atoi(RSTRING_PTR(query_end_qs));
+      }
+
+      // Get the past N seconds of data.
+      // @TODO they query method fails if we query for data newer than the last entry.
+      VALUE query_recent = rb_hash_aref(query_string, rb_str_new("recent", 6));
+      if (query_recent != Qnil) {
+        query_end = (long int)time(NULL);
+        long int history = atoi(RSTRING_PTR(query_recent));
+        query_start = query_end - history;
+      }
 
       // Create a new Statsr object to query from.
       // @todo we probably need to assign a new array to @data to avoid messing up the pointers.
@@ -313,17 +342,16 @@ static VALUE statsr_rack_call(VALUE self, VALUE env) {
       rb_iv_set(tmp, "@data", tmp_data);
       statsr_query(tmp, rb_str_plus(rb_iv_get(self, "@split_file_dir"), statsr_ns), statsr_ns, INT2NUM(query_limit), INT2NUM(query_start), INT2NUM(query_end));
       statsr_sort(tmp);
-      //VALUE tmp_data = rb_iv_get(tmp, "@data");
 
       int data_length = RARRAY_LEN(tmp_data);
       int i;
-   
+
       for (i = 0; i < data_length; i++) {
         rb_ary_push(body, rb_str_new("[", 1));
         rb_ary_push(body, rb_obj_as_string(rb_hash_aref(rb_ary_entry(tmp_data, i), statsr_key_ts )));
-        rb_ary_push(body, rb_str_new(",'", 2));
+        rb_ary_push(body, rb_str_new(",\"", 2));
         rb_ary_push(body, rb_hash_aref(rb_ary_entry(tmp_data, i), statsr_key_ns ));
-        rb_ary_push(body, rb_str_new("',", 2));
+        rb_ary_push(body, rb_str_new("\",", 2));
         rb_ary_push(body, rb_obj_as_string(rb_hash_aref(rb_ary_entry(tmp_data, i), statsr_key_v )));
         rb_ary_push(body, rb_str_new("]", 1));
         if (i < data_length - 1) {
@@ -333,11 +361,9 @@ static VALUE statsr_rack_call(VALUE self, VALUE env) {
       } 
       rb_ary_resize(tmp_data, 0);
     }
+    rb_ary_push(body, rb_str_new("]}", 2));
     if (jsoncallback != Qnil) {
-      rb_ary_push(body, rb_str_new("]})", 3));
-    }
-    else {
-      rb_ary_push(body, rb_str_new("}", 1));
+      rb_ary_push(body, rb_str_new(")", 1));
     }
   }
   else {
