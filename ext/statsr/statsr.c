@@ -256,30 +256,43 @@ static VALUE statsr_rack_call(VALUE self, VALUE env) {
   }
 
   //const char *method = RSTRING_PTR(rb_hash_aref(env, rb_str_new2("REQUEST_METHOD")));
+  // @TODO consider moving the request method to the proper REQUEST_METHOD
   const char *method_get = "GET";
   const char *method_put = "PUT";
   // Remove the leading /
   path++;
   const char *method = strtok(path, "/\0");
   if (method && strcmp(method, method_put) == 0) {
-    const char * statsr_str_ts = strtok(NULL, "/\0");
-    long int statsr_ts = (statsr_str_ts) ? atoi(statsr_str_ts) : 0;
-    if (statsr_ts == 0) {
+    long int statsr_ts, statsr_v;
+
+    // Get the timestamp, default to now.
+    VALUE statsr_ts_qs = rb_hash_aref(query_string, rb_str_new("time", 4));
+    if (statsr_ts_qs != Qnil) {
+      statsr_ts = atoi(RSTRING_PTR(statsr_ts_qs ));
+    }
+    else {
       statsr_ts = (long int)time(NULL);
     }
-    const char * statsr_str_ns = strtok(NULL, "/\0");
-    if (statsr_str_ns) {
-      VALUE statsr_ns = rb_str_new2(statsr_str_ns);
-      const char * statsr_str_v = strtok(NULL, "/\0");
-      int statsr_v = (statsr_str_v ) ? atoi(statsr_str_v ) : 0;
 
-      // @TODO check for incorrect url format.
+    // Get the namespace.
+    VALUE statsr_ns = rb_hash_aref(query_string, rb_str_new("name", 4));
+    if (statsr_ns == Qnil) {
+      statsr_ns = NULL;
+    }
+
+    if (statsr_ns) {
+      // Get the value.
+      statsr_v= 0;
+      VALUE statsr_v_qs = rb_hash_aref(query_string, rb_str_new("value", 5));
+      if (statsr_v_qs != Qnil) {
+        statsr_v = atoi(RSTRING_PTR(statsr_v_qs));
+      }
+
       rb_hash_aset(statsr_hash, statsr_key_ts, INT2NUM(statsr_ts));
       rb_hash_aset(statsr_hash, statsr_key_ns, statsr_ns);
       rb_hash_aset(statsr_hash, statsr_key_v, INT2NUM(statsr_v));
       rb_ary_push(statsr_data, statsr_hash);
 
-      // @TODO move the log file to rack config.
       int data_length = RARRAY_LEN(statsr_data);
       rb_ary_push(body, rb_obj_as_string(INT2NUM(RARRAY_LEN(statsr_data))));
       if (data_length > 9) {
