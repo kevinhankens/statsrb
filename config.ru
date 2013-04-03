@@ -1,6 +1,6 @@
-require 'statsr'
+require 'statsrb'
 
-s = Statsr.new
+s = Statsrb.new
 
 s.split_file_dir = "/tmp/statsr/"
 

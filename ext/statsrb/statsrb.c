@@ -3,7 +3,7 @@
 #include <string.h>
 #include <stdlib.h>
 
-static VALUE statsr_query(VALUE self, VALUE logfile, VALUE query_ns, VALUE query_limit, VALUE query_start, VALUE query_end) {
+static VALUE statsrb_query(VALUE self, VALUE logfile, VALUE query_ns, VALUE query_limit, VALUE query_start, VALUE query_end) {
   // File pointer.
   FILE * file;
   // File line max length.
@@ -13,11 +13,11 @@ static VALUE statsr_query(VALUE self, VALUE logfile, VALUE query_ns, VALUE query
   const char *query_ns_char = RSTRING_PTR(query_ns);
 
   // Create symbols by passing ruby strings into rb_str_intern.
-  VALUE statsr_key_ts = rb_str_intern(rb_str_new2("ts"));
-  VALUE statsr_key_ns = rb_str_intern(rb_str_new2("ns"));
-  VALUE statsr_key_v = rb_str_intern(rb_str_new2("v"));
+  VALUE statsrb_key_ts = rb_str_intern(rb_str_new2("ts"));
+  VALUE statsrb_key_ns = rb_str_intern(rb_str_new2("ns"));
+  VALUE statsrb_key_v = rb_str_intern(rb_str_new2("v"));
   // Create an empty string for comparison.
-  VALUE statsr_str_empty = rb_str_new2("");
+  VALUE statsrb_str_empty = rb_str_new2("");
 
   // Convert into an int that ruby understands.
   int limit = NUM2INT(query_limit);
@@ -25,9 +25,9 @@ static VALUE statsr_query(VALUE self, VALUE logfile, VALUE query_ns, VALUE query
   int qend = NUM2INT(query_end);
 
   // Return array instantiation.
-  VALUE statsr_data = rb_iv_get(self, "@data");
+  VALUE statsrb_data = rb_iv_get(self, "@data");
   // @TODO does this garbage collect all of the old hash data?
-  rb_ary_resize(statsr_data, 0);
+  rb_ary_resize(statsrb_data, 0);
 
   file = fopen (filepath, "r");
   if (file==NULL) {
@@ -46,29 +46,29 @@ static VALUE statsr_query(VALUE self, VALUE logfile, VALUE query_ns, VALUE query
 
     // If the namespace is in the row, explode it.
     if (line[0] != '\0' && line[0] != '\n' && strchr(line, query_ns_char[0]) && strstr(line, query_ns_char)) {
-      VALUE statsr_event = rb_hash_new();
+      VALUE statsrb_event = rb_hash_new();
 
       // I tried sscanf for convenience, but it was predictably slower.
-      //int statsr_ts, statsr_v;
-      //sscanf(line, "%d\t%*s\t%d", &statsr_ts, &statsr_v);
+      //int statsrb_ts, statsrb_v;
+      //sscanf(line, "%d\t%*s\t%d", &statsrb_ts, &statsrb_v);
 
       // @TODO this should something more robust than atoi.
-      int statsr_ts = atoi(strtok(line, "\t"));
+      int statsrb_ts = atoi(strtok(line, "\t"));
 
-      if (statsr_ts != NULL && (qstart == 0 || statsr_ts >= qstart) && (qend == 0 || statsr_ts <= qend)) {
+      if (statsrb_ts != NULL && (qstart == 0 || statsrb_ts >= qstart) && (qend == 0 || statsrb_ts <= qend)) {
         // @TODO this should probably use the actual namespace if we do wildcard queries.
-        VALUE statsr_str_ns = rb_str_new2(strtok(NULL, "\t"));
+        VALUE statsrb_str_ns = rb_str_new2(strtok(NULL, "\t"));
         //strtok(NULL, "\t");
-        int statsr_v = atoi(strtok(NULL, "\0"));
+        int statsrb_v = atoi(strtok(NULL, "\0"));
   
         // @TODO this should really query the namespace exactly instead of just relying on strstr.
-        //if (rb_str_cmp(query_ns, statsr_str_empty) == 0 || rb_str_cmp(query_ns, statsr_str_ns) == 0) {
-        if (statsr_ts && (statsr_v || statsr_v == 0)) {
-          rb_hash_aset(statsr_event, statsr_key_ts, INT2NUM(statsr_ts));
-          rb_hash_aset(statsr_event, statsr_key_ns, statsr_str_ns);
-          //rb_hash_aset(statsr_event, statsr_key_ns, query_ns);
-          rb_hash_aset(statsr_event, statsr_key_v, INT2NUM(statsr_v));
-          rb_ary_push(statsr_data, statsr_event);
+        //if (rb_str_cmp(query_ns, statsrb_str_empty) == 0 || rb_str_cmp(query_ns, statsrb_str_ns) == 0) {
+        if (statsrb_ts && (statsrb_v || statsrb_v == 0)) {
+          rb_hash_aset(statsrb_event, statsrb_key_ts, INT2NUM(statsrb_ts));
+          rb_hash_aset(statsrb_event, statsrb_key_ns, statsrb_str_ns);
+          //rb_hash_aset(statsrb_event, statsrb_key_ns, query_ns);
+          rb_hash_aset(statsrb_event, statsrb_key_v, INT2NUM(statsrb_v));
+          rb_ary_push(statsrb_data, statsrb_event);
           count++;
         }
       }
@@ -79,8 +79,8 @@ static VALUE statsr_query(VALUE self, VALUE logfile, VALUE query_ns, VALUE query
   fclose (file);
   free (line);
 
-  //return statsr_data;
-  //rb_iv_set(self, "@data", statsr_data);
+  //return statsrb_data;
+  //rb_iv_set(self, "@data", statsrb_data);
 
   return self;
 }
@@ -88,18 +88,18 @@ static VALUE statsr_query(VALUE self, VALUE logfile, VALUE query_ns, VALUE query
 /**
  * Implementation of quicksort algorithm.
  */
-void time_sort(int left, int right, VALUE ary, VALUE statsr_key_ts) {
+void time_sort(int left, int right, VALUE ary, VALUE statsrb_key_ts) {
   int i = left;
   int j = right;
   int p = (i + j) / 2;
-  int pv = NUM2INT(rb_hash_aref(rb_ary_entry(ary, p), statsr_key_ts));
+  int pv = NUM2INT(rb_hash_aref(rb_ary_entry(ary, p), statsrb_key_ts));
   VALUE tmp;
 
   while (i <= j) {
-    while (NUM2INT(rb_hash_aref(rb_ary_entry(ary, i), statsr_key_ts)) < pv) {
+    while (NUM2INT(rb_hash_aref(rb_ary_entry(ary, i), statsrb_key_ts)) < pv) {
       i++;
     }
-    while (NUM2INT(rb_hash_aref(rb_ary_entry(ary, j), statsr_key_ts)) > pv) {
+    while (NUM2INT(rb_hash_aref(rb_ary_entry(ary, j), statsrb_key_ts)) > pv) {
       j--;
     }
     if (i <= j) {
@@ -112,44 +112,44 @@ void time_sort(int left, int right, VALUE ary, VALUE statsr_key_ts) {
   }
 
   if (left < j) {
-    time_sort(left, j, ary, statsr_key_ts);
+    time_sort(left, j, ary, statsrb_key_ts);
   }
   if (i < right) {
-    time_sort(i, right, ary, statsr_key_ts);
+    time_sort(i, right, ary, statsrb_key_ts);
   }
 }
 
 /**
  * Sort the internal data using a quicksort algorithm based on the hash element's timestamp.
  */
-static VALUE statsr_sort(VALUE self) {
-  VALUE statsr_data = rb_iv_get(self, "@data");
-  int len = RARRAY_LEN(statsr_data);
+static VALUE statsrb_sort(VALUE self) {
+  VALUE statsrb_data = rb_iv_get(self, "@data");
+  int len = RARRAY_LEN(statsrb_data);
   if (len > 0) {
-    VALUE statsr_key_ts = rb_str_intern(rb_str_new2("ts"));
-    time_sort(0, len - 1, statsr_data, statsr_key_ts);
+    VALUE statsrb_key_ts = rb_str_intern(rb_str_new2("ts"));
+    time_sort(0, len - 1, statsrb_data, statsrb_key_ts);
   }
-  return statsr_data;
+  return statsrb_data;
 }
 
 /**
  * Write the in-memory data to a file.
  */
-static VALUE statsr_write(VALUE self, VALUE logfile, VALUE mode) {
+static VALUE statsrb_write(VALUE self, VALUE logfile, VALUE mode) {
   FILE * file;
   const char *filepath = RSTRING_PTR(logfile);
   const char *filemode = RSTRING_PTR(mode);
-  VALUE statsr_data = rb_iv_get(self, "@data");
-  int data_length = RARRAY_LEN(statsr_data);
+  VALUE statsrb_data = rb_iv_get(self, "@data");
+  int data_length = RARRAY_LEN(statsrb_data);
   int i;
   int line_size = 256;
   int tmp_ts, tmp_v;
   const char *tmp_ns = (char *) malloc(line_size);
   
   // Create symbols by passing ruby strings into rb_str_intern.
-  VALUE statsr_key_ts = rb_str_intern(rb_str_new2("ts"));
-  VALUE statsr_key_ns = rb_str_intern(rb_str_new2("ns"));
-  VALUE statsr_key_v = rb_str_intern(rb_str_new2("v"));
+  VALUE statsrb_key_ts = rb_str_intern(rb_str_new2("ts"));
+  VALUE statsrb_key_ns = rb_str_intern(rb_str_new2("ns"));
+  VALUE statsrb_key_v = rb_str_intern(rb_str_new2("v"));
 
   file = fopen (filepath, filemode);
   if (file==NULL) {
@@ -161,9 +161,9 @@ static VALUE statsr_write(VALUE self, VALUE logfile, VALUE mode) {
   for (i = 0; i < data_length; i++) {
     // @TODO make sure that these values are not empty before writing.
     //VALUE tmp_line = rb_str_tmp_new(line_size);
-    tmp_ts = NUM2INT(rb_hash_aref(rb_ary_entry(statsr_data, i), statsr_key_ts));
-    tmp_ns = RSTRING_PTR(rb_hash_aref(rb_ary_entry(statsr_data, i), statsr_key_ns));
-    tmp_v = NUM2INT(rb_hash_aref(rb_ary_entry(statsr_data, i), statsr_key_v));
+    tmp_ts = NUM2INT(rb_hash_aref(rb_ary_entry(statsrb_data, i), statsrb_key_ts));
+    tmp_ns = RSTRING_PTR(rb_hash_aref(rb_ary_entry(statsrb_data, i), statsrb_key_ns));
+    tmp_v = NUM2INT(rb_hash_aref(rb_ary_entry(statsrb_data, i), statsrb_key_v));
     fprintf(file, "%d\t%s\t%d\n", tmp_ts, tmp_ns, tmp_v);
     //rb_str_free(tmp_line);
   }
@@ -175,20 +175,20 @@ static VALUE statsr_write(VALUE self, VALUE logfile, VALUE mode) {
 /**
  * A method to split unique namespaces from internal memory and write them to individual files.
  */
-static VALUE statsr_split_write(VALUE self, VALUE logdir, VALUE mode) {
-  VALUE statsr_data = rb_iv_get(self, "@data");
-  int len = RARRAY_LEN(statsr_data);
+static VALUE statsrb_split_write(VALUE self, VALUE logdir, VALUE mode) {
+  VALUE statsrb_data = rb_iv_get(self, "@data");
+  int len = RARRAY_LEN(statsrb_data);
   int i, ii, ns_len;
 
-  VALUE statsr_key_ts = rb_str_intern(rb_str_new2("ts"));
-  VALUE statsr_key_ns = rb_str_intern(rb_str_new2("ns"));
-  VALUE statsr_key_v = rb_str_intern(rb_str_new2("v"));
+  VALUE statsrb_key_ts = rb_str_intern(rb_str_new2("ts"));
+  VALUE statsrb_key_ns = rb_str_intern(rb_str_new2("ns"));
+  VALUE statsrb_key_v = rb_str_intern(rb_str_new2("v"));
 
   VALUE ns_list = rb_ary_new();
 
   for (i = 0; i < len; i++) {
-    if (!rb_ary_includes(ns_list, rb_hash_aref(rb_ary_entry(statsr_data, i), statsr_key_ns))) {
-      rb_ary_push(ns_list, rb_hash_aref(rb_ary_entry(statsr_data, i), statsr_key_ns));
+    if (!rb_ary_includes(ns_list, rb_hash_aref(rb_ary_entry(statsrb_data, i), statsrb_key_ns))) {
+      rb_ary_push(ns_list, rb_hash_aref(rb_ary_entry(statsrb_data, i), statsrb_key_ns));
     }
   }
 
@@ -198,15 +198,15 @@ static VALUE statsr_split_write(VALUE self, VALUE logdir, VALUE mode) {
     VALUE tmp = rb_obj_dup(self);
     VALUE tmp_data = rb_ary_new();
     for (ii = 0; ii < len; ii++) {
-      if (rb_str_cmp(rb_ary_entry(ns_list, i), rb_hash_aref(rb_ary_entry(statsr_data, ii), statsr_key_ns)) == 0) {
-        rb_ary_push(tmp_data, rb_ary_entry(statsr_data, ii));
+      if (rb_str_cmp(rb_ary_entry(ns_list, i), rb_hash_aref(rb_ary_entry(statsrb_data, ii), statsrb_key_ns)) == 0) {
+        rb_ary_push(tmp_data, rb_ary_entry(statsrb_data, ii));
       }
     }
     //fputs (RSTRING_PTR(rb_obj_as_string(INT2NUM(RARRAY_LEN(tmp_data)))),stderr);
     rb_iv_set(tmp, "@data", tmp_data);
 
     // @todo, throw an exception if no trailing slash... or add one
-    statsr_write(tmp, rb_str_plus(logdir, rb_ary_entry(ns_list, i)), mode);
+    statsrb_write(tmp, rb_str_plus(logdir, rb_ary_entry(ns_list, i)), mode);
   }
 
   return self;
@@ -216,17 +216,17 @@ static VALUE statsr_split_write(VALUE self, VALUE logdir, VALUE mode) {
  * A method that is compatible with the rack api.
  * @TODO can we keep these in shared memory somehow and write in batches?
  */
-static VALUE statsr_rack_call(VALUE self, VALUE env) {
+static VALUE statsrb_rack_call(VALUE self, VALUE env) {
   VALUE response = rb_ary_new();
   VALUE headers = rb_hash_new();
   VALUE body = rb_ary_new();
-  VALUE statsr_data = rb_iv_get(self, "@data");
-  VALUE statsr_hash = rb_hash_new();
+  VALUE statsrb_data = rb_iv_get(self, "@data");
+  VALUE statsrb_hash = rb_hash_new();
 
   // Create symbols by passing ruby strings into rb_str_intern.
-  VALUE statsr_key_ts = rb_str_intern(rb_str_new2("ts"));
-  VALUE statsr_key_ns = rb_str_intern(rb_str_new2("ns"));
-  VALUE statsr_key_v = rb_str_intern(rb_str_new2("v"));
+  VALUE statsrb_key_ts = rb_str_intern(rb_str_new2("ts"));
+  VALUE statsrb_key_ns = rb_str_intern(rb_str_new2("ns"));
+  VALUE statsrb_key_v = rb_str_intern(rb_str_new2("v"));
 
   char *path = RSTRING_PTR(rb_hash_aref(env, rb_str_new2("PATH_INFO")));
 
@@ -263,50 +263,50 @@ static VALUE statsr_rack_call(VALUE self, VALUE env) {
   path++;
   const char *method = strtok(path, "/\0");
   if (method && strcmp(method, method_put) == 0) {
-    long int statsr_ts, statsr_v;
+    long int statsrb_ts, statsrb_v;
 
     // Get the timestamp, default to now.
-    VALUE statsr_ts_qs = rb_hash_aref(query_string, rb_str_new("time", 4));
-    if (statsr_ts_qs != Qnil) {
-      statsr_ts = atoi(RSTRING_PTR(statsr_ts_qs ));
+    VALUE statsrb_ts_qs = rb_hash_aref(query_string, rb_str_new("time", 4));
+    if (statsrb_ts_qs != Qnil) {
+      statsrb_ts = atoi(RSTRING_PTR(statsrb_ts_qs ));
     }
     else {
-      statsr_ts = (long int)time(NULL);
+      statsrb_ts = (long int)time(NULL);
     }
 
     // Get the namespace.
-    VALUE statsr_ns = rb_hash_aref(query_string, rb_str_new("name", 4));
-    if (statsr_ns == Qnil) {
-      statsr_ns = NULL;
+    VALUE statsrb_ns = rb_hash_aref(query_string, rb_str_new("name", 4));
+    if (statsrb_ns == Qnil) {
+      statsrb_ns = NULL;
     }
 
-    if (statsr_ns) {
+    if (statsrb_ns) {
       // Get the value.
-      statsr_v= 0;
-      VALUE statsr_v_qs = rb_hash_aref(query_string, rb_str_new("value", 5));
-      if (statsr_v_qs != Qnil) {
-        statsr_v = atoi(RSTRING_PTR(statsr_v_qs));
+      statsrb_v= 0;
+      VALUE statsrb_v_qs = rb_hash_aref(query_string, rb_str_new("value", 5));
+      if (statsrb_v_qs != Qnil) {
+        statsrb_v = atoi(RSTRING_PTR(statsrb_v_qs));
       }
 
-      rb_hash_aset(statsr_hash, statsr_key_ts, INT2NUM(statsr_ts));
-      rb_hash_aset(statsr_hash, statsr_key_ns, statsr_ns);
-      rb_hash_aset(statsr_hash, statsr_key_v, INT2NUM(statsr_v));
-      rb_ary_push(statsr_data, statsr_hash);
+      rb_hash_aset(statsrb_hash, statsrb_key_ts, INT2NUM(statsrb_ts));
+      rb_hash_aset(statsrb_hash, statsrb_key_ns, statsrb_ns);
+      rb_hash_aset(statsrb_hash, statsrb_key_v, INT2NUM(statsrb_v));
+      rb_ary_push(statsrb_data, statsrb_hash);
 
-      int data_length = RARRAY_LEN(statsr_data);
-      rb_ary_push(body, rb_obj_as_string(INT2NUM(RARRAY_LEN(statsr_data))));
+      int data_length = RARRAY_LEN(statsrb_data);
+      rb_ary_push(body, rb_obj_as_string(INT2NUM(RARRAY_LEN(statsrb_data))));
       if (data_length > 9) {
       rb_ary_push(body, rb_str_new2("split"));
-        statsr_sort(self);
-        statsr_split_write(self, rb_iv_get(self, "@split_file_dir"), rb_str_new2("a+"));
-        rb_ary_resize(statsr_data, 0);
+        statsrb_sort(self);
+        statsrb_split_write(self, rb_iv_get(self, "@split_file_dir"), rb_str_new2("a+"));
+        rb_ary_resize(statsrb_data, 0);
       }
 
-      rb_ary_push(body, statsr_ns);
+      rb_ary_push(body, statsrb_ns);
     }
   }
   else if (method && strcmp(method, method_get) == 0) {
-    const char * statsr_str_ns = strtok(NULL, "/\0");
+    const char * statsrb_str_ns = strtok(NULL, "/\0");
     VALUE jsoncallback = rb_hash_aref(query_string, rb_str_new("jsoncallback", 12));
     if (jsoncallback != Qnil) {
       rb_ary_push(body, rb_str_plus(jsoncallback, rb_str_new("(", 1)));
@@ -314,8 +314,8 @@ static VALUE statsr_rack_call(VALUE self, VALUE env) {
     rb_ary_push(body, rb_str_new("{\"data\":[", 9));
 
     // If they didn't specify a namespace, bail out immediately.
-    if (statsr_str_ns) {
-      VALUE statsr_ns = rb_str_new2(statsr_str_ns);
+    if (statsrb_str_ns) {
+      VALUE statsrb_ns = rb_str_new2(statsrb_str_ns);
       long int query_limit, query_start, query_end;
 
       // Get the query limit.
@@ -348,24 +348,24 @@ static VALUE statsr_rack_call(VALUE self, VALUE env) {
         query_start = query_end - history;
       }
 
-      // Create a new Statsr object to query from.
+      // Create a new Statsrb object to query from.
       // @todo we probably need to assign a new array to @data to avoid messing up the pointers.
       VALUE tmp = rb_obj_dup(self);
       VALUE tmp_data = rb_ary_new();
       rb_iv_set(tmp, "@data", tmp_data);
-      statsr_query(tmp, rb_str_plus(rb_iv_get(self, "@split_file_dir"), statsr_ns), statsr_ns, INT2NUM(query_limit), INT2NUM(query_start), INT2NUM(query_end));
-      statsr_sort(tmp);
+      statsrb_query(tmp, rb_str_plus(rb_iv_get(self, "@split_file_dir"), statsrb_ns), statsrb_ns, INT2NUM(query_limit), INT2NUM(query_start), INT2NUM(query_end));
+      statsrb_sort(tmp);
 
       int data_length = RARRAY_LEN(tmp_data);
       int i;
 
       for (i = 0; i < data_length; i++) {
         rb_ary_push(body, rb_str_new("[", 1));
-        rb_ary_push(body, rb_obj_as_string(rb_hash_aref(rb_ary_entry(tmp_data, i), statsr_key_ts )));
+        rb_ary_push(body, rb_obj_as_string(rb_hash_aref(rb_ary_entry(tmp_data, i), statsrb_key_ts )));
         rb_ary_push(body, rb_str_new(",\"", 2));
-        rb_ary_push(body, rb_hash_aref(rb_ary_entry(tmp_data, i), statsr_key_ns ));
+        rb_ary_push(body, rb_hash_aref(rb_ary_entry(tmp_data, i), statsrb_key_ns ));
         rb_ary_push(body, rb_str_new("\",", 2));
-        rb_ary_push(body, rb_obj_as_string(rb_hash_aref(rb_ary_entry(tmp_data, i), statsr_key_v )));
+        rb_ary_push(body, rb_obj_as_string(rb_hash_aref(rb_ary_entry(tmp_data, i), statsrb_key_v )));
         rb_ary_push(body, rb_str_new("]", 1));
         if (i < data_length - 1) {
           rb_ary_push(body, rb_str_new(",", 1));
@@ -397,25 +397,25 @@ static VALUE statsr_rack_call(VALUE self, VALUE env) {
  * Class constructor, sets up an instance variable.
  * @TODO move symbol defs to constructor.
  */
-static VALUE statsr_constructor(VALUE self) {
-  VALUE statsr_data = rb_ary_new();
-  rb_iv_set(self, "@data", statsr_data);
-  VALUE statsr_split_file_dir = rb_str_new("/tmp", 4);
-  rb_iv_set(self, "@split_file_dir", statsr_split_file_dir);
+static VALUE statsrb_constructor(VALUE self) {
+  VALUE statsrb_data = rb_ary_new();
+  rb_iv_set(self, "@data", statsrb_data);
+  VALUE statsrb_split_file_dir = rb_str_new("/tmp", 4);
+  rb_iv_set(self, "@split_file_dir", statsrb_split_file_dir);
 
   return self;
 }
 
 /* ruby calls this to load the extension */
-void Init_statsr(void) {
-  VALUE klass = rb_define_class("Statsr", rb_cObject);
+void Init_statsrb(void) {
+  VALUE klass = rb_define_class("Statsrb", rb_cObject);
 
-  rb_define_method(klass, "initialize", statsr_constructor, 0);
-  rb_define_method(klass, "query", statsr_query, 5);
-  rb_define_method(klass, "sort", statsr_sort, 0);
-  rb_define_method(klass, "write", statsr_write, 2);
-  rb_define_method(klass, "split_write", statsr_split_write, 2);
-  rb_define_method(klass, "call", statsr_rack_call, 1);
+  rb_define_method(klass, "initialize", statsrb_constructor, 0);
+  rb_define_method(klass, "query", statsrb_query, 5);
+  rb_define_method(klass, "sort", statsrb_sort, 0);
+  rb_define_method(klass, "write", statsrb_write, 2);
+  rb_define_method(klass, "split_write", statsrb_split_write, 2);
+  rb_define_method(klass, "call", statsrb_rack_call, 1);
   // Define :attr_accessor (read/write instance var)
   // Note that this must correspond with a call to rb_iv_self() and it's string name must be @data.
   rb_define_attr(klass, "data", 1, 1);

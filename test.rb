@@ -2,7 +2,7 @@
 
 time_start = Time.now.to_f
 
-require 'statsr'
+require 'statsrb'
 require 'pp'
 require 'json'
 
