@@ -307,11 +307,17 @@ static VALUE statsrb_rack_call(VALUE self, VALUE env) {
   }
   else if (method && strcmp(method, method_get) == 0) {
     const char * statsrb_str_ns = strtok(NULL, "/\0");
+    if (statsrb_str_ns == NULL) {
+      statsrb_str_ns = "data";
+    }
+
     VALUE jsoncallback = rb_hash_aref(query_string, rb_str_new("jsoncallback", 12));
     if (jsoncallback != Qnil) {
       rb_ary_push(body, rb_str_plus(jsoncallback, rb_str_new("(", 1)));
     }
-    rb_ary_push(body, rb_str_new("{\"data\":[", 9));
+    char json_start[256];
+    sprintf(json_start, "{\"%s\":[", statsrb_str_ns);
+    rb_ary_push(body, rb_str_new2(json_start));
 
     // If they didn't specify a namespace, bail out immediately.
     if (statsrb_str_ns) {
@@ -356,15 +362,12 @@ static VALUE statsrb_rack_call(VALUE self, VALUE env) {
       statsrb_query(tmp, rb_str_plus(rb_iv_get(self, "@split_file_dir"), statsrb_ns), statsrb_ns, INT2NUM(query_limit), INT2NUM(query_start), INT2NUM(query_end));
       statsrb_sort(tmp);
 
-      int data_length = RARRAY_LEN(tmp_data);
-      int i;
+      int i, data_length = RARRAY_LEN(tmp_data);
 
       for (i = 0; i < data_length; i++) {
         rb_ary_push(body, rb_str_new("[", 1));
         rb_ary_push(body, rb_obj_as_string(rb_hash_aref(rb_ary_entry(tmp_data, i), statsrb_key_ts )));
-        rb_ary_push(body, rb_str_new(",\"", 2));
-        rb_ary_push(body, rb_hash_aref(rb_ary_entry(tmp_data, i), statsrb_key_ns ));
-        rb_ary_push(body, rb_str_new("\",", 2));
+        rb_ary_push(body, rb_str_new(",", 1));
         rb_ary_push(body, rb_obj_as_string(rb_hash_aref(rb_ary_entry(tmp_data, i), statsrb_key_v )));
         rb_ary_push(body, rb_str_new("]", 1));
         if (i < data_length - 1) {
