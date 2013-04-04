@@ -12,10 +12,10 @@ static VALUE statsrb_query(VALUE self, VALUE logfile, VALUE query_ns, VALUE quer
   const char *filepath = RSTRING_PTR(logfile);
   const char *query_ns_char = RSTRING_PTR(query_ns);
 
-  // Create symbols by passing ruby strings into rb_str_intern.
-  VALUE statsrb_key_ts = rb_str_intern(rb_str_new2("ts"));
-  VALUE statsrb_key_ns = rb_str_intern(rb_str_new2("ns"));
-  VALUE statsrb_key_v = rb_str_intern(rb_str_new2("v"));
+  // @data hash key symbols.
+  VALUE statsrb_key_ts = rb_iv_get(self, "@key_ts");
+  VALUE statsrb_key_ns = rb_iv_get(self, "@key_ns");
+  VALUE statsrb_key_v = rb_iv_get(self, "@key_v");
   // Create an empty string for comparison.
   VALUE statsrb_str_empty = rb_str_new2("");
 
@@ -126,7 +126,7 @@ static VALUE statsrb_sort(VALUE self) {
   VALUE statsrb_data = rb_iv_get(self, "@data");
   int len = RARRAY_LEN(statsrb_data);
   if (len > 0) {
-    VALUE statsrb_key_ts = rb_str_intern(rb_str_new2("ts"));
+    VALUE statsrb_key_ts = rb_iv_get(self, "@key_ts");
     time_sort(0, len - 1, statsrb_data, statsrb_key_ts);
   }
   return statsrb_data;
@@ -146,10 +146,10 @@ static VALUE statsrb_write(VALUE self, VALUE logfile, VALUE mode) {
   int tmp_ts, tmp_v;
   const char *tmp_ns = (char *) malloc(line_size);
   
-  // Create symbols by passing ruby strings into rb_str_intern.
-  VALUE statsrb_key_ts = rb_str_intern(rb_str_new2("ts"));
-  VALUE statsrb_key_ns = rb_str_intern(rb_str_new2("ns"));
-  VALUE statsrb_key_v = rb_str_intern(rb_str_new2("v"));
+  // @data hash key symbols.
+  VALUE statsrb_key_ts = rb_iv_get(self, "@key_ts");
+  VALUE statsrb_key_ns = rb_iv_get(self, "@key_ns");
+  VALUE statsrb_key_v = rb_iv_get(self, "@key_v");
 
   file = fopen (filepath, filemode);
   if (file==NULL) {
@@ -180,9 +180,10 @@ static VALUE statsrb_split_write(VALUE self, VALUE logdir, VALUE mode) {
   int len = RARRAY_LEN(statsrb_data);
   int i, ii, ns_len;
 
-  VALUE statsrb_key_ts = rb_str_intern(rb_str_new2("ts"));
-  VALUE statsrb_key_ns = rb_str_intern(rb_str_new2("ns"));
-  VALUE statsrb_key_v = rb_str_intern(rb_str_new2("v"));
+  // @data hash key symbols.
+  VALUE statsrb_key_ts = rb_iv_get(self, "@key_ts");
+  VALUE statsrb_key_ns = rb_iv_get(self, "@key_ns");
+  VALUE statsrb_key_v = rb_iv_get(self, "@key_v");
 
   VALUE ns_list = rb_ary_new();
 
@@ -213,27 +214,15 @@ static VALUE statsrb_split_write(VALUE self, VALUE logdir, VALUE mode) {
 }
 
 /**
- * A method that is compatible with the rack api.
- * @TODO can we keep these in shared memory somehow and write in batches?
+ * Parses the query string parameters.
+ *
+ * @param char * qs
+ *   The location of the query string.
+ *
+ * @return VALUE
+ *   The ruby hash containing the query string keys and values.
  */
-static VALUE statsrb_rack_call(VALUE self, VALUE env) {
-  VALUE response = rb_ary_new();
-  VALUE headers = rb_hash_new();
-  VALUE body = rb_ary_new();
-  VALUE statsrb_data = rb_iv_get(self, "@data");
-  VALUE statsrb_hash = rb_hash_new();
-
-  // Create symbols by passing ruby strings into rb_str_intern.
-  VALUE statsrb_key_ts = rb_str_intern(rb_str_new2("ts"));
-  VALUE statsrb_key_ns = rb_str_intern(rb_str_new2("ns"));
-  VALUE statsrb_key_v = rb_str_intern(rb_str_new2("v"));
-
-  char *path = RSTRING_PTR(rb_hash_aref(env, rb_str_new2("PATH_INFO")));
-
-  rb_hash_aset(headers, rb_str_new2("Content-Type"), rb_str_new2("text/json"));
-
-  // Parse the query string
-  char *qs = RSTRING_PTR(rb_hash_aref(env, rb_str_new2("QUERY_STRING")));
+static VALUE statsrb_parse_qs(char *qs) {
   char *qsk, *qsv;
   VALUE query_string_tmp = rb_ary_new();
   VALUE query_string = rb_hash_new();
@@ -254,6 +243,33 @@ static VALUE statsrb_rack_call(VALUE self, VALUE env) {
       rb_hash_aset(query_string, rb_str_new2(qsk), rb_str_new2(""));
     }
   }
+
+  return query_string;
+}
+
+/**
+ * A method that is compatible with the rack api.
+ * @TODO can we keep these in shared memory somehow and write in batches?
+ */
+static VALUE statsrb_rack_call(VALUE self, VALUE env) {
+  VALUE response = rb_ary_new();
+  VALUE headers = rb_hash_new();
+  VALUE body = rb_ary_new();
+  VALUE statsrb_data = rb_iv_get(self, "@data");
+  VALUE statsrb_hash = rb_hash_new();
+
+  // @data hash key symbols.
+  VALUE statsrb_key_ts = rb_iv_get(self, "@key_ts");
+  VALUE statsrb_key_ns = rb_iv_get(self, "@key_ns");
+  VALUE statsrb_key_v = rb_iv_get(self, "@key_v");
+
+  char *path = RSTRING_PTR(rb_hash_aref(env, rb_str_new2("PATH_INFO")));
+
+  rb_hash_aset(headers, rb_str_new2("Content-Type"), rb_str_new2("text/json"));
+
+  // Parse the query string
+  char *qs = RSTRING_PTR(rb_hash_aref(env, rb_str_new2("QUERY_STRING")));
+  VALUE query_string = statsrb_parse_qs(qs);
 
   //const char *method = RSTRING_PTR(rb_hash_aref(env, rb_str_new2("REQUEST_METHOD")));
   // @TODO consider moving the request method to the proper REQUEST_METHOD
@@ -405,6 +421,14 @@ static VALUE statsrb_constructor(VALUE self) {
   rb_iv_set(self, "@data", statsrb_data);
   VALUE statsrb_split_file_dir = rb_str_new("/tmp", 4);
   rb_iv_set(self, "@split_file_dir", statsrb_split_file_dir);
+
+  // Internal symbols for :ts, :ns and :v.
+  VALUE statsrb_key_ts = rb_str_intern(rb_str_new2("ts"));
+  rb_iv_set(self, "@key_ts", statsrb_key_ts);
+  VALUE statsrb_key_ns = rb_str_intern(rb_str_new2("ns"));
+  rb_iv_set(self, "@key_ns", statsrb_key_ns);
+  VALUE statsrb_key_v = rb_str_intern(rb_str_new2("v"));
+  rb_iv_set(self, "@key_v", statsrb_key_v);
 
   return self;
 }

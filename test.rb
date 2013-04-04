@@ -8,8 +8,8 @@ require 'json'
 
 time_require = Time.now.to_f
 
-s = Statsr.new
-s.query "/tmp/statsr/craig", "craig", 10, 0, 0
+s = Statsrb.new
+s.query "/tmp/statsr/kv3", "kv3", 10, 0, 0
 s.sort
 pp s.data
 
@@ -18,7 +18,7 @@ abort
 
 puts "GEM"
 
-s = Statsr.new
+s = Statsrb.new
 s.query "/var/log/statstest.log", ARGV[0], ARGV[1].to_f, 1357997415, 1357997429
 s.sort
 s.write "/home/khankens/ktest.log", "w+"
