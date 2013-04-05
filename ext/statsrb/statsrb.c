@@ -3,10 +3,11 @@
 #include <string.h>
 #include <stdlib.h>
 
+/**
+ * Loads a file and filters on a specified namespace.
+ */
 static VALUE statsrb_query(VALUE self, VALUE logfile, VALUE query_ns, VALUE query_limit, VALUE query_start, VALUE query_end) {
-  // File pointer.
   FILE * file;
-  // File line max length.
   int line_size = 256;
   char *line = (char *) malloc(line_size);
   const char *filepath = RSTRING_PTR(logfile);
@@ -38,7 +39,6 @@ static VALUE statsrb_query(VALUE self, VALUE logfile, VALUE query_ns, VALUE quer
   int count = 0;
 
   while (NULL != fgets(line, line_size, file) && count < limit) {
-
     // strstr doesn't work with newline chars. 
     size_t len = strlen(line) - 1;
     if (line[len] == '\n');
@@ -249,7 +249,6 @@ static VALUE statsrb_parse_qs(char *qs) {
 
 /**
  * A method that is compatible with the rack api.
- * @TODO can we keep these in shared memory somehow and write in batches?
  */
 static VALUE statsrb_rack_call(VALUE self, VALUE env) {
   VALUE response = rb_ary_new();
@@ -312,7 +311,6 @@ static VALUE statsrb_rack_call(VALUE self, VALUE env) {
       int data_length = RARRAY_LEN(statsrb_data);
       rb_ary_push(body, rb_obj_as_string(INT2NUM(RARRAY_LEN(statsrb_data))));
       if (data_length > 9) {
-      rb_ary_push(body, rb_str_new2("split"));
         statsrb_sort(self);
         statsrb_split_write(self, rb_iv_get(self, "@split_file_dir"), rb_str_new2("a+"));
         rb_ary_resize(statsrb_data, 0);
@@ -433,10 +431,13 @@ static VALUE statsrb_constructor(VALUE self) {
   return self;
 }
 
-/* ruby calls this to load the extension */
+/**
+ * Init the Statsrb class.
+ */
 void Init_statsrb(void) {
   VALUE klass = rb_define_class("Statsrb", rb_cObject);
 
+  // Instance methods and properties.
   rb_define_method(klass, "initialize", statsrb_constructor, 0);
   rb_define_method(klass, "query", statsrb_query, 5);
   rb_define_method(klass, "sort", statsrb_sort, 0);

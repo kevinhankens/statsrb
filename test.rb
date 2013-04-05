@@ -9,9 +9,10 @@ require 'json'
 time_require = Time.now.to_f
 
 s = Statsrb.new
-s.query "/tmp/statsr/kv3", "kv3", 10, 0, 0
+s.query "/tmp/statsr/kv4", "kv4", 1000, 0, 0
 s.sort
-pp s.data
+s.write "/tmp/statsr/kv4", "w+"
+#pp s.data
 
 
 abort
