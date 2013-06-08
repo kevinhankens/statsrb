@@ -1,7 +1,7 @@
 Gem::Specification.new do |s|
   s.name        = 'statsrb'
   s.version     = '0.1.0'
-  s.date        = '2013-6-8'
+  s.date        = '2013-06-08'
   s.summary     = "Statsrb"
   s.description = "A ruby stats repository."
   s.authors     = ["Kevin Hankens"]
