@@ -30,11 +30,13 @@ REST URI Examples
 -----------------
 Save a statistic (for now it only writes to file on every 10th request)
 ```
+http://localhost/PUT?name=test&value=123
 http://localhost/PUT?name=test&value=123&time=123456789
 ```
 Get a statistic within a time range
 ```
-http://localhost/GET/test?start=123456789&end=123456789&limit=100
+http://localhost/GET/test?start=123456789&end=123456789
+http://localhost/GET/test?start=123456789&end=123456789&limit=1000
 ```
 Get a statistic from a recent time
 ```
@@ -42,7 +44,7 @@ http://localhost/GET/test?recent=86400&limit=100
 ```
 Get a statistic to apply to a jsonp callback
 ```
-http://localhost/GET/test?recent=123456789&limit=100&jsoncallback=mycallback
+http://localhost/GET/test?recent=86400&limit=100&jsoncallback=mycallback
 ```
 
 Ruby API Example
