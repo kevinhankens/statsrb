@@ -6,6 +6,8 @@ All queries are served with JSON data, optionally using jsonp if you need to exe
 
 The philosophy behind statsrb is that you can leverage the speed of a gem written in C while making it easy to extend using ruby. It works great out of the box with a rack server and a Javascript library like Flot.
 
+Current Version 0.1.2
+
 Installation
 ------------
 ```
@@ -23,6 +25,8 @@ require 'statsrb'
 s = Statsrb.new
 # Make sure this directory exists and is writable.
 s.split_file_dir = "/tmp/statsr/"
+# Flush @data to file when there are more than 9 values.
+s.flush_count = 9
 run s
 ```
 
