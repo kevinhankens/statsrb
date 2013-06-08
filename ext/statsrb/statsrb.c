@@ -360,7 +360,7 @@ static VALUE statsrb_rack_call(VALUE self, VALUE env) {
       }
 
       // Get the past N seconds of data.
-      // @TODO they query method fails if we query for data newer than the last entry.
+      // @TODO the query method fails if we query for data newer than the last entry.
       VALUE query_recent = rb_hash_aref(query_string, rb_str_new("recent", 6));
       if (query_recent != Qnil) {
         query_end = (long int)time(NULL);
@@ -412,7 +412,6 @@ static VALUE statsrb_rack_call(VALUE self, VALUE env) {
 
 /**
  * Class constructor, sets up an instance variable.
- * @TODO move symbol defs to constructor.
  */
 static VALUE statsrb_constructor(VALUE self) {
   VALUE statsrb_data = rb_ary_new();
