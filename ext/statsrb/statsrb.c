@@ -4,7 +4,13 @@
 #include <stdlib.h>
 
 /**
- * Loads a file and filters on a specified namespace.
+ * Locates data from a specified file and loads into @data.
+ * @param filepath [String]
+ * @param namespace [String]
+ * @param limit [Number]
+ * @param start_time [Number]
+ * @param end_time [Number]
+ * @return [Statsrb] A reference to the object.
  */
 static VALUE statsrb_query(VALUE self, VALUE logfile, VALUE query_ns, VALUE query_limit, VALUE query_start, VALUE query_end) {
   FILE * file;
@@ -120,7 +126,8 @@ void time_sort(int left, int right, VALUE ary, VALUE statsrb_key_ts) {
 }
 
 /**
- * Sort the internal data using a quicksort algorithm based on the hash element's timestamp.
+ * Sorts @data using a quicksort algorithm based on the hash element's timestamp.
+ * @return [Hash] The sorted data
  */
 static VALUE statsrb_sort(VALUE self) {
   VALUE statsrb_data = rb_iv_get(self, "@data");
@@ -133,7 +140,10 @@ static VALUE statsrb_sort(VALUE self) {
 }
 
 /**
- * Write the in-memory data to a file.
+ * Writes the @data in memory to a specified file.
+ * @param filepath [String]
+ * @param filemode [String]
+ * @return [Statsrb] A reference to the object.
  */
 static VALUE statsrb_write(VALUE self, VALUE logfile, VALUE mode) {
   FILE * file;
@@ -173,8 +183,14 @@ static VALUE statsrb_write(VALUE self, VALUE logfile, VALUE mode) {
 }
 
 /**
- * A method to split unique namespaces from internal memory and write them to individual files.
- */
+ * Locates data from a specified file and loads into @data.
+ * @param filepath [String]
+ * @param namespace [String]
+ * @param limit [Number]
+ * @param start_time [Number]
+ * @param end_time [Number]
+ * @return [Statsrb] A reference to the object.
+*/
 static VALUE statsrb_split_write(VALUE self, VALUE logdir, VALUE mode) {
   VALUE statsrb_data = rb_iv_get(self, "@data");
   int len = RARRAY_LEN(statsrb_data);
@@ -248,8 +264,9 @@ static VALUE statsrb_parse_qs(char *qs) {
 }
 
 /**
- * A method that is compatible with the rack api.
- */
+ * Returns a rack-compatible response.
+ * @param env [Hash]
+*/
 static VALUE statsrb_rack_call(VALUE self, VALUE env) {
   VALUE response = rb_ary_new();
   VALUE headers = rb_hash_new();
@@ -411,6 +428,31 @@ static VALUE statsrb_rack_call(VALUE self, VALUE env) {
 }
 
 /**
+ * Pushes a stat onto the statsrb object.
+ * @param timestamp [Number]
+ * @param namespace [String]
+ * @param value [Number]
+ * @return [Statsrb] A reference to the object.
+ */
+static VALUE statsrb_push(VALUE self, VALUE timestamp, VALUE namespace, VALUE value) {
+  VALUE statsrb_data = rb_iv_get(self, "@data");
+  VALUE statsrb_event = rb_hash_new();
+
+  // @data hash key symbols.
+  VALUE statsrb_key_ts = rb_iv_get(self, "@key_ts");
+  VALUE statsrb_key_ns = rb_iv_get(self, "@key_ns");
+  VALUE statsrb_key_v = rb_iv_get(self, "@key_v");
+
+  rb_hash_aset(statsrb_event, statsrb_key_ts, timestamp);
+  rb_hash_aset(statsrb_event, statsrb_key_ns, namespace);
+  rb_hash_aset(statsrb_event, statsrb_key_v, value);
+
+  rb_ary_push(statsrb_data, statsrb_event);
+
+  return self;
+}
+ 
+/**
  * Class constructor, sets up an instance variable.
  */
 static VALUE statsrb_constructor(VALUE self) {
@@ -434,6 +476,7 @@ static VALUE statsrb_constructor(VALUE self) {
  * Init the Statsrb class.
  */
 void Init_statsrb(void) {
+  // @author Kevin Hankens
   VALUE klass = rb_define_class("Statsrb", rb_cObject);
 
   // Instance methods and properties.
@@ -442,9 +485,13 @@ void Init_statsrb(void) {
   rb_define_method(klass, "sort", statsrb_sort, 0);
   rb_define_method(klass, "write", statsrb_write, 2);
   rb_define_method(klass, "split_write", statsrb_split_write, 2);
+  rb_define_method(klass, "push", statsrb_push, 3);
   rb_define_method(klass, "call", statsrb_rack_call, 1);
   // Define :attr_accessor (read/write instance var)
   // Note that this must correspond with a call to rb_iv_self() and it's string name must be @data.
+  // An array of hashes keyed with :ts(timestamp), :ns(namespace) and :v(value)
+  //   e.g. [!{:ts => Time.now.to_i, :ns => "test", :v => 33}]
   rb_define_attr(klass, "data", 1, 1);
+  // The file directory to write when splitting namespaces. @see #split_write
   rb_define_attr(klass, "split_file_dir", 1, 1);
 }

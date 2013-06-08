@@ -9,12 +9,25 @@ The philosophy behind statsrb is that you can leverage the speed of a gem writte
 Installation
 ------------
 ```
-gem install statsrb
-rackup config.ru
+$ gem install statsrb
+$ vim config.ru
+$ mkdir /tmp/statsr
+$ rackup config.ru
 ```
 
-REST Examples
--------------
+Example config.ru
+-----------------
+```ruby
+require 'statsrb'
+
+s = Statsrb.new
+# Make sure this directory exists and is writable.
+s.split_file_dir = "/tmp/statsr/"
+run s
+```
+
+REST URI Examples
+-----------------
 Save a statistic
 ```
 http://localhost/put?name=test&value=123&time=123456789
@@ -42,15 +55,13 @@ require 'pp'
 
 # Create new data with various timestamps, namespaces and values.
 s = Statsrb.new
-s.data = [
-  {:ts => Time.now.to_i,         :ns => "test1", :v => 33},
-  {:ts => 123456789,             :ns => "test2", :v => 34},
-  {:ts => (Time.now.to_i - 50),  :ns => "test1", :v => 35},
-  {:ts => (Time.now.to_i - 100), :ns => "test1", :v => 36},
-]
+s.push Time.now.to_i, "test1", 33
+s.push 123456789, "test1", 34
+s.push (Time.now.to_i - 50), "test2", 35
+s.push (Time.now.to_i - 100), "test1", 36
 
 # Save the data to a single file.
-s.write "/tmp/test.statsr", "w+"
+s.write "/tmp/test.statsrb", "w+"
 
 # Save the data to a separate files for each namespace.
 s.split_write "/tmp/", "w+"
@@ -59,15 +70,14 @@ s.split_write "/tmp/", "w+"
 t = Statsrb.new
 
 # Query based on namespace, limit, start and end timestamps.
-t.query "/tmp/test.statsr", "test1", 100, 0, 0
+t.query "/tmp/test.statsrb", "test1", 100, 0, 0
 
 # Sort the data
 t.sort
 
 # Save the indexed data if you like.
-t.write "/tmp/test.statsr", "w+"
+t.write "/tmp/test.statsrb", "w+"
 
 # See what you are working with.
 pp t.data
 ```
-
