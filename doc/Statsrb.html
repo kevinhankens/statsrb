@@ -127,7 +127,35 @@
 
   
     <span class="summary_desc"><div class='inline'>
-<p>e.g.</p>
+<p>An array of hashes keyed with :ts(timestamp), :ns(namespace) and :v(value)
+e.g.</p>
+</div></span>
+  
+</li>
+
+    
+      <li class="public ">
+  <span class="summary_signature">
+    
+      <a href="#flush_count-instance_method" title="#flush_count (instance method)">- (Object) <strong>flush_count</strong> </a>
+    
+
+    
+  </span>
+  
+  
+  
+    
+    
+  
+  
+  
+  
+  
+
+  
+    <span class="summary_desc"><div class='inline'>
+<p>The max count of @data before flushing and writing to file.</p>
 </div></span>
   
 </li>
@@ -376,7 +404,6 @@ timestamp.</p>
       <pre class="lines">
 
 
-458
 459
 460
 461
@@ -391,16 +418,19 @@ timestamp.</p>
 470
 471
 472
-473</pre>
+473
+474
+475</pre>
     </td>
     <td>
-      <pre class="code"><span class="info file"># File 'ext/statsrb/statsrb.c', line 458</span>
+      <pre class="code"><span class="info file"># File 'ext/statsrb/statsrb.c', line 459</span>
 
 static VALUE statsrb_constructor(VALUE self) {
   VALUE statsrb_data = rb_ary_new();
   rb_iv_set(self, &quot;@data&quot;, statsrb_data);
   VALUE statsrb_split_file_dir = rb_str_new(&quot;/tmp&quot;, 4);
   rb_iv_set(self, &quot;@split_file_dir&quot;, statsrb_split_file_dir);
+  rb_iv_set(self, &quot;@flush_count&quot;, INT2NUM(9));
 
   // Internal symbols for :ts, :ns and :v.
   VALUE statsrb_key_ts = rb_str_intern(rb_str_new2(&quot;ts&quot;));
@@ -436,7 +466,33 @@ static VALUE statsrb_constructor(VALUE self) {
 </h3><div class="docstring">
   <div class="discussion">
     
-<p>e.g. [{:ts =&gt; Time.now.to_i, :ns =&gt; "test", :v =&gt; 33}]</p>
+<p>An array of hashes keyed with :ts(timestamp), :ns(namespace) and :v(value)
+e.g. [{:ts =&gt; Time.now.to_i, :ns =&gt; "test", :v =&gt; 33}]</p>
+
+
+  </div>
+</div>
+<div class="tags">
+  
+
+</div>
+</div>
+    
+      
+      <span id="flush_count=-instance_method"></span>
+      <div class="method_details ">
+  <h3 class="signature " id="flush_count-instance_method">
+  
+    - (<tt>Object</tt>) <strong>flush_count</strong> 
+  
+
+  
+
+  
+</h3><div class="docstring">
+  <div class="discussion">
+    
+<p>The max count of @data before flushing and writing to file.</p>
 
 
   </div>
@@ -678,7 +734,8 @@ static VALUE statsrb_constructor(VALUE self) {
 425
 426
 427
-428</pre>
+428
+429</pre>
     </td>
     <td>
       <pre class="code"><span class="info file"># File 'ext/statsrb/statsrb.c', line 270</span>
@@ -743,7 +800,8 @@ static VALUE statsrb_rack_call(VALUE self, VALUE env) {
 
       int data_length = RARRAY_LEN(statsrb_data);
       rb_ary_push(body, rb_obj_as_string(INT2NUM(RARRAY_LEN(statsrb_data))));
-      if (data_length &gt; 9) {
+
+      if (data_length &gt; NUM2INT(rb_iv_get(self, &quot;@flush_count&quot;))) {
         statsrb_sort(self);
         statsrb_split_write(self, rb_iv_get(self, &quot;@split_file_dir&quot;), rb_str_new2(&quot;a+&quot;));
         rb_ary_resize(statsrb_data, 0);
@@ -928,7 +986,6 @@ static VALUE statsrb_rack_call(VALUE self, VALUE env) {
       <pre class="lines">
 
 
-437
 438
 439
 440
@@ -944,10 +1001,11 @@ static VALUE statsrb_rack_call(VALUE self, VALUE env) {
 450
 451
 452
-453</pre>
+453
+454</pre>
     </td>
     <td>
-      <pre class="code"><span class="info file"># File 'ext/statsrb/statsrb.c', line 437</span>
+      <pre class="code"><span class="info file"># File 'ext/statsrb/statsrb.c', line 438</span>
 
 static VALUE statsrb_push(VALUE self, VALUE timestamp, VALUE namespace, VALUE value) {
   VALUE statsrb_data = rb_iv_get(self, &quot;@data&quot;);
@@ -1653,7 +1711,7 @@ static VALUE statsrb_write(VALUE self, VALUE logfile, VALUE mode) {
 </div>
 
     <div id="footer">
-  Generated on Sat Jun  8 16:43:46 2013 by
+  Generated on Sat Jun  8 18:02:55 2013 by
   <a href="http://yardoc.org" title="Yay! A Ruby Documentation Tool" target="_parent">yard</a>
   0.8.6.1 (ruby-1.9.3).
 </div>

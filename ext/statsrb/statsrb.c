@@ -327,7 +327,8 @@ static VALUE statsrb_rack_call(VALUE self, VALUE env) {
 
       int data_length = RARRAY_LEN(statsrb_data);
       rb_ary_push(body, rb_obj_as_string(INT2NUM(RARRAY_LEN(statsrb_data))));
-      if (data_length > 9) {
+
+      if (data_length > NUM2INT(rb_iv_get(self, "@flush_count"))) {
         statsrb_sort(self);
         statsrb_split_write(self, rb_iv_get(self, "@split_file_dir"), rb_str_new2("a+"));
         rb_ary_resize(statsrb_data, 0);
@@ -460,6 +461,7 @@ static VALUE statsrb_constructor(VALUE self) {
   rb_iv_set(self, "@data", statsrb_data);
   VALUE statsrb_split_file_dir = rb_str_new("/tmp", 4);
   rb_iv_set(self, "@split_file_dir", statsrb_split_file_dir);
+  rb_iv_set(self, "@flush_count", INT2NUM(9));
 
   // Internal symbols for :ts, :ns and :v.
   VALUE statsrb_key_ts = rb_str_intern(rb_str_new2("ts"));
@@ -489,9 +491,10 @@ void Init_statsrb(void) {
   rb_define_method(klass, "call", statsrb_rack_call, 1);
   // Define :attr_accessor (read/write instance var)
   // Note that this must correspond with a call to rb_iv_self() and it's string name must be @data.
-  // An array of hashes keyed with :ts(timestamp), :ns(namespace) and :v(value)
-  //   e.g. [!{:ts => Time.now.to_i, :ns => "test", :v => 33}]
+  // An array of hashes keyed with :ts(timestamp), :ns(namespace) and :v(value) e.g. [!{:ts => Time.now.to_i, :ns => "test", :v => 33}]
   rb_define_attr(klass, "data", 1, 1);
   // The file directory to write when splitting namespaces. @see #split_write
   rb_define_attr(klass, "split_file_dir", 1, 1);
+  // When used with a rack server, the max count of @data before flushing and writing to file.
+  rb_define_attr(klass, "flush_count", 1, 1);
 }
