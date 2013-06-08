@@ -30,10 +30,10 @@ static VALUE statsrb_query(VALUE self, VALUE logfile, VALUE query_ns, VALUE quer
   // @TODO does this garbage collect all of the old hash data?
   rb_ary_resize(statsrb_data, 0);
 
-  file = fopen (filepath, "r");
-  if (file==NULL) {
-    fputs ("File error",stderr);
-    exit (1);
+  file = fopen(filepath, "r");
+  if (file == NULL) {
+    fprintf(stderr, "File error: could not open file %s for reading.", filepath);
+    return;
   }
 
   int count = 0;
@@ -151,10 +151,10 @@ static VALUE statsrb_write(VALUE self, VALUE logfile, VALUE mode) {
   VALUE statsrb_key_ns = rb_iv_get(self, "@key_ns");
   VALUE statsrb_key_v = rb_iv_get(self, "@key_v");
 
-  file = fopen (filepath, filemode);
+  file = fopen(filepath, filemode);
   if (file==NULL) {
-    fputs ("File error",stderr);
-    exit (1);
+    fprintf(stderr, "File error: could not open file %s mode %s.", filepath, filemode);
+    return;
   }
 
   // Iterate through the data array, writing the data as we go.
