@@ -28,7 +28,7 @@ run s
 
 REST URI Examples
 -----------------
-Save a statistic
+Save a statistic (for now it only writes to file on every 10th request)
 ```
 http://localhost/put?name=test&value=123&time=123456789
 ```
