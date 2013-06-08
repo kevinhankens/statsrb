@@ -23,7 +23,8 @@ Example config.ru
 require 'statsrb'
 
 s = Statsrb.new
-# Make sure this directory exists and is writable.
+# Writes statistics to files in this directory
+# Make sure the directory exists and is writable.
 s.split_file_dir = "/tmp/statsr/"
 # Flush @data to file when there are more than 9 values.
 s.flush_count = 9
