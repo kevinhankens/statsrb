@@ -32,7 +32,7 @@ run s
 
 REST URI Examples
 -----------------
-Save a statistic (for now it only writes to file on every 10th request)
+Save a statistic (flushes to a file based on the values of @split_file_dir and @flush_count)
 ```
 http://localhost/PUT?name=test&value=123
 http://localhost/PUT?name=test&value=123&time=123456789
