@@ -289,12 +289,14 @@ static VALUE statsrb_rack_call(VALUE self, VALUE env) {
 
   //const char *method = RSTRING_PTR(rb_hash_aref(env, rb_str_new2("REQUEST_METHOD")));
   // @TODO consider moving the request method to the proper REQUEST_METHOD
-  const char *method_get = "GET";
-  const char *method_put = "PUT";
+  const char *method_get = "get";
+  const char *method_getu = "GET";
+  const char *method_put = "put";
+  const char *method_putu = "PUT";
   // Remove the leading /
   path++;
   const char *method = strtok(path, "/\0");
-  if (method && strcmp(method, method_put) == 0) {
+  if (method && (strcmp(method, method_put) == 0 || strcmp(method, method_putu) == 0)) {
     long int statsrb_ts, statsrb_v;
 
     // Get the timestamp, default to now.
@@ -337,7 +339,7 @@ static VALUE statsrb_rack_call(VALUE self, VALUE env) {
       rb_ary_push(body, statsrb_ns);
     }
   }
-  else if (method && strcmp(method, method_get) == 0) {
+  else if (method && (strcmp(method, method_get) == 0 || strcmp(method, method_getu) == 0)) {
     const char * statsrb_str_ns = strtok(NULL, "/\0");
     if (statsrb_str_ns == NULL) {
       statsrb_str_ns = "data";
