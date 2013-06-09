@@ -1,12 +1,16 @@
 statsrb
 =======
-This gem is a lightweight self-contained, yet extendable stats aggregation server. The rack appliance receives time-series, integer stats via REST, and offers a simple API for searching and sorting. Each data segment is given a namespace that can be tracked through time. For example, your data for "users" would report an integer value with a timestamp that could then be queried to analyze changes over time.
+This gem is a lightweight, self-contained (yet extendable) time series stats aggregation server written in C. The rack appliance can be used to record stats from your application via a simple REST API, and offers a simple API for searching and sorting. Each data segment is given a namespace that can be tracked through time. For example, you could send a count of logged-in users every minute and track that metric over time.
 
 All queries are served with JSON data, optionally using jsonp if you need to execute cross-domain queries. Since this is fundamentally for time-series data, all requests are ordered chronologically.
 
-The philosophy behind statsrb is that you can leverage the speed of a gem written in C while making it easy to extend using ruby. It works great out of the box with a rack server and a Javascript library like Flot.
+If you do not need the REST API, the gem provides a Statsrb object that can be used to store data locally, also providing search and sort functionality.
 
-Current Version 0.1.2
+The philosophy behind statsrb is that you can leverage the speed of a gem written in C while making it easy to extend using ruby. Since time series data is simple, and quickly sorted, flat file storage is perfectly adequate. Without complicated databases, storage is kept to a minimum and the data can easily be used in other applications. Statsrb works great out of the box with a rack server and a Javascript library like Flot. It can just as easily be integrated into any Ruby app.
+
+As evidenced by the version number, this project is just getting started. Please feel free to submit issues or pull requests... any help would be appreciated :)
+
+Current Version 0.1.3
 
 Installation
 ------------
@@ -88,3 +92,26 @@ t.write "/tmp/test.statsrb", "w+"
 # See what you are working with.
 pp t.data
 ```
+
+License
+-------
+Copyright 2013 Kevin Hankens
+
+Permission is hereby granted, free of charge, to any person obtaining
+a copy of this software and associated documentation files (the
+"Software"), to deal in the Software without restriction, including
+without limitation the rights to use, copy, modify, merge, publish,
+distribute, sublicense, and/or sell copies of the Software, and to
+permit persons to whom the Software is furnished to do so, subject to
+the following conditions:
+
+The above copyright notice and this permission notice shall be
+included in all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE
+LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
+WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
