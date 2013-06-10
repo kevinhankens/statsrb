@@ -93,6 +93,81 @@ t.write "/tmp/test.statsrb", "w+"
 pp t.data
 ```
 
+HTML/Javascript Example using jQuery and Flot
+---------------------------------------------
+(These files are located in /examples/)
+
+First, ake sure you have pushed a bunch of data to the "test" namespace.
+```
+http://localhost[:port]/put?name=test&value=123
+```
+
+Serve the following index.html file from a different web server. Make sure to include the javascript files on that same server.
+```html
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Statsrb Javascript Example</title>
+  <script language="Javascript" type="text/javascript" src="http://localhost:3000/js/jquery.min.js"></script> 
+  <script language="Javascript" type="text/javascript" src="http://localhost:3000/js/jquery.flot.min.js"></script> 
+  <script language="Javascript" type="text/javascript" src="http://localhost:3000/js/jquery.flot.time.min.js"></script> 
+  <script language="Javascript" type="text/javascript" src="http://localhost:3000/js/statsrb.js"></script>
+
+  <style type="text/css">
+    body {background-color: #333; font-family: "Helvetica"; color: #f1f1f1;}
+    #stats {width: 100%; height: 300px;}
+  </style>
+</head>
+
+<body>
+  <div id="stats"></div>
+</body>
+
+</html>
+```
+
+serve the following Javascript file with index.html in /js/statsrb.js
+```javascript
+/**
+ * @file
+ * This javascript obtains metrics from Statsrb and displays them using a simple
+ * Flot time series graph.
+ */
+
+$(document).ready(function (context) {
+
+  // Your data namespace to query, statsrb rack server domain name and port.
+  var namespace = 'test';
+  var domain = 'localhost';
+  var port = '9292';
+
+  // Plot options.
+  var options = {
+    xaxis: {
+      mode: "time",
+      timeformat: "%m/%d %I:%M"
+    },
+  }
+
+  // Get the data from the server and plot it.
+  $.ajax({type: 'GET',
+    url: 'http://' + domain + ':' + port + '/get/' + namespace,
+    crossDomain: true,
+    dataType: 'jsonp',
+    jsonp: 'jsoncallback',
+    success: function(data) {
+      $.each(data[namespace], function(key, value) {
+        data[namespace][key][0] *= 1000;
+      });
+
+      $('#stats').before('<h1>Stats for: &quot;' + namespace + '&quot;</h1>');
+      $.plot('#stats', [data[namespace]], options);
+    }
+  });
+
+});
+```
+
 License
 -------
 Copyright 2013 Kevin Hankens
