@@ -222,7 +222,12 @@ static VALUE statsrb_split_write(VALUE self, VALUE logdir, VALUE mode) {
     //fputs (RSTRING_PTR(rb_obj_as_string(INT2NUM(RARRAY_LEN(tmp_data)))),stderr);
     rb_iv_set(tmp, "@data", tmp_data);
 
-    // @todo, throw an exception if no trailing slash... or add one
+    // If there is no trailing slash on the log dir, add one.
+    const char *filepath = RSTRING_PTR(logdir);
+    size_t len = strlen(filepath);
+    if (filepath[len - 1] != '/') {
+      logdir = rb_str_plus(logdir, rb_str_new2("/"));
+    }
     statsrb_write(tmp, rb_str_plus(logdir, rb_ary_entry(ns_list, i)), mode);
   }
 
