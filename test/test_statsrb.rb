@@ -40,6 +40,13 @@ class TestStatsrb < MiniTest::Test
     push_data
     assert_equal @s.data.length, get_data.length
   end
+  
+  # Tests that we can filter the in-memory data.
+  def test_get_data
+    push_data
+    t = @s.get "test2", 100, 0, 0
+    assert_equal(t.length, 2);
+  end
 
   # Tests that we can sort the data.
   def test_sort_data
@@ -70,13 +77,13 @@ class TestStatsrb < MiniTest::Test
     end
   end
 
-  # Tests that we can query data from a file.
-  def test_query_data
+  # Tests that we can read data from a file.
+  def test_read_data
     push_data
     write_data
-    @s.query @tmpfile, "test1", 100, 0, 0
+    @s.read @tmpfile, "test1", 100, 0, 0
     assert_equal @s.data.length, 3
-    @s.query @tmpfile, "test2", 100, 0, 0
+    @s.read @tmpfile, "test2", 100, 0, 0
     assert_equal @s.data.length, 2
   end
 end

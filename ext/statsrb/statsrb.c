@@ -4,6 +4,52 @@
 #include <stdlib.h>
 
 /**
+ * Retrieves internal data based on specified filters.
+ * @param namespace [String]
+ * @param limit [Number]
+ * @param start_time [Number]
+ * @param end_time [Number]
+ * @return [Array] An array of data hashes.
+ */
+static VALUE statsrb_get(VALUE self, VALUE query_ns, VALUE query_limit, VALUE query_start, VALUE query_end) {
+  VALUE statsrb_data = rb_iv_get(self, "@data");
+  VALUE statsrb_event = rb_hash_new();
+  int data_length = RARRAY_LEN(statsrb_data);
+  int i = 0;
+  int count = 0;
+  int tmp_ts;
+
+  VALUE filtered_data = rb_ary_new();
+  VALUE tmp_ns;
+
+  // @data hash key symbols.
+  VALUE statsrb_key_ts = rb_iv_get(self, "@key_ts");
+  VALUE statsrb_key_ns = rb_iv_get(self, "@key_ns");
+  VALUE statsrb_key_v = rb_iv_get(self, "@key_v");
+
+  // Convert into an int that ruby understands.
+  int limit = NUM2INT(query_limit);
+  int qstart = NUM2INT(query_start);
+  int qend = NUM2INT(query_end);
+
+  for (i = 0; i < data_length; i++) {
+    tmp_ts = NUM2INT(rb_hash_aref(rb_ary_entry(statsrb_data, i), statsrb_key_ts));
+    tmp_ns = rb_hash_aref(rb_ary_entry(statsrb_data, i), statsrb_key_ns);
+    if (rb_str_equal(query_ns, tmp_ns)
+        && (qstart == 0 || tmp_ts >= qstart)
+        && (qend == 0 || tmp_ts <= qend)) {
+      rb_hash_aset(statsrb_event, statsrb_key_ts, rb_hash_aref(rb_ary_entry(statsrb_data, i), statsrb_key_ts));
+      rb_hash_aset(statsrb_event, statsrb_key_ns, rb_hash_aref(rb_ary_entry(statsrb_data, i), statsrb_key_ns));
+      rb_hash_aset(statsrb_event, statsrb_key_v, rb_hash_aref(rb_ary_entry(statsrb_data, i), statsrb_key_v));
+      rb_ary_push(filtered_data, statsrb_event);
+      count++;
+    }
+  }
+
+  return filtered_data;
+}
+
+/**
  * Locates data from a specified file and loads into @data.
  * @param filepath [String]
  * @param namespace [String]
@@ -12,7 +58,7 @@
  * @param end_time [Number]
  * @return [Statsrb] A reference to the object.
  */
-static VALUE statsrb_query(VALUE self, VALUE logfile, VALUE query_ns, VALUE query_limit, VALUE query_start, VALUE query_end) {
+static VALUE statsrb_read(VALUE self, VALUE logfile, VALUE query_ns, VALUE query_limit, VALUE query_start, VALUE query_end) {
   FILE * file;
   int line_size = 256;
   char *line = (char *) malloc(line_size);
@@ -45,7 +91,7 @@ static VALUE statsrb_query(VALUE self, VALUE logfile, VALUE query_ns, VALUE quer
   int count = 0;
 
   while (NULL != fgets(line, line_size, file) && count < limit) {
-    // strstr doesn't work with newline chars. 
+    // strstr doesn't work with newline chars.
     size_t len = strlen(line) - 1;
     if (line[len] == '\n');
         line[len] = '\0';
@@ -66,7 +112,7 @@ static VALUE statsrb_query(VALUE self, VALUE logfile, VALUE query_ns, VALUE quer
         VALUE statsrb_str_ns = rb_str_new2(strtok(NULL, "\t"));
         //strtok(NULL, "\t");
         int statsrb_v = atoi(strtok(NULL, "\0"));
-  
+
         // @TODO this should really query the namespace exactly instead of just relying on strstr.
         //if (rb_str_cmp(query_ns, statsrb_str_empty) == 0 || rb_str_cmp(query_ns, statsrb_str_ns) == 0) {
         if (statsrb_ts && (statsrb_v || statsrb_v == 0)) {
@@ -155,7 +201,7 @@ static VALUE statsrb_write(VALUE self, VALUE logfile, VALUE mode) {
   int line_size = 256;
   int tmp_ts, tmp_v;
   const char *tmp_ns = (char *) malloc(line_size);
-  
+
   // @data hash key symbols.
   VALUE statsrb_key_ts = rb_iv_get(self, "@key_ts");
   VALUE statsrb_key_ns = rb_iv_get(self, "@key_ns");
@@ -398,7 +444,7 @@ static VALUE statsrb_rack_call(VALUE self, VALUE env) {
       VALUE tmp = rb_obj_dup(self);
       VALUE tmp_data = rb_ary_new();
       rb_iv_set(tmp, "@data", tmp_data);
-      statsrb_query(tmp, rb_str_plus(rb_iv_get(self, "@split_file_dir"), statsrb_ns), statsrb_ns, INT2NUM(query_limit), INT2NUM(query_start), INT2NUM(query_end));
+      statsrb_read(tmp, rb_str_plus(rb_iv_get(self, "@split_file_dir"), statsrb_ns), statsrb_ns, INT2NUM(query_limit), INT2NUM(query_start), INT2NUM(query_end));
       statsrb_sort(tmp);
 
       int i, data_length = RARRAY_LEN(tmp_data);
@@ -413,7 +459,7 @@ static VALUE statsrb_rack_call(VALUE self, VALUE env) {
           rb_ary_push(body, rb_str_new(",", 1));
         }
         rb_ary_push(body, rb_str_new("\n", 1));
-      } 
+      }
       rb_ary_resize(tmp_data, 0);
     }
     rb_ary_push(body, rb_str_new("]}", 2));
@@ -459,7 +505,7 @@ static VALUE statsrb_push(VALUE self, VALUE timestamp, VALUE namespace, VALUE va
 
   return self;
 }
- 
+
 /**
  * Class constructor, sets up an instance variable.
  */
@@ -490,7 +536,9 @@ void Init_statsrb(void) {
 
   // Instance methods and properties.
   rb_define_method(klass, "initialize", statsrb_constructor, 0);
-  rb_define_method(klass, "query", statsrb_query, 5);
+  rb_define_method(klass, "query", statsrb_read, 5);
+  rb_define_method(klass, "read", statsrb_read, 5);
+  rb_define_method(klass, "get", statsrb_get, 4);
   rb_define_method(klass, "sort", statsrb_sort, 0);
   rb_define_method(klass, "write", statsrb_write, 2);
   rb_define_method(klass, "split_write", statsrb_split_write, 2);
