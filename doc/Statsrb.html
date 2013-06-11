@@ -94,12 +94,39 @@
   
   
     <dt class="r2 last">Defined in:</dt>
-    <dd class="r2 last">ext/statsrb/statsrb.c</dd>
+    <dd class="r2 last">lib/statsrb.rb<span class="defines">,<br />
+  ext/statsrb/statsrb.c</span>
+</dd>
   
 </dl>
 <div class="clear"></div>
 
+<h2>Overview</h2><div class="docstring">
+  <div class="discussion">
+    
 
+  </div>
+</div>
+<div class="tags">
+  
+<p class="tag_title">Author:</p>
+<ul class="author">
+  
+    <li>
+      
+      
+      
+      
+        
+        <div class='inline'>
+<p>Kevin Hankens</p>
+</div>
+      
+    </li>
+  
+</ul>
+
+</div>
 
 
 
@@ -155,7 +182,8 @@ e.g.</p>
 
   
     <span class="summary_desc"><div class='inline'>
-<p>The max count of @data before flushing and writing to file.</p>
+<p>When used with a rack server, the max count of @data before flushing and
+writing to file.</p>
 </div></span>
   
 </li>
@@ -228,6 +256,30 @@ e.g.</p>
         <li class="public ">
   <span class="summary_signature">
     
+      <a href="#get-instance_method" title="#get (instance method)">- (Array) <strong>get</strong> </a>
+    
+
+    
+  </span>
+  
+  
+  
+  
+  
+  
+  
+
+  
+    <span class="summary_desc"><div class='inline'>
+<p>Retrieves internal data based on specified filters.</p>
+</div></span>
+  
+</li>
+
+      
+        <li class="public ">
+  <span class="summary_signature">
+    
       <a href="#initialize-instance_method" title="#initialize (instance method)">- (Object) <strong>initialize</strong> </a>
     
 
@@ -279,6 +331,30 @@ e.g.</p>
   <span class="summary_signature">
     
       <a href="#query-instance_method" title="#query (instance method)">- (Statsrb) <strong>query</strong> </a>
+    
+
+    
+  </span>
+  
+  
+  
+  
+  
+  
+  
+
+  
+    <span class="summary_desc"><div class='inline'>
+<p>Locates data from a specified file and loads into @data.</p>
+</div></span>
+  
+</li>
+
+      
+        <li class="public ">
+  <span class="summary_signature">
+    
+      <a href="#read-instance_method" title="#read (instance method)">- (Statsrb) <strong>read</strong> </a>
     
 
     
@@ -404,26 +480,26 @@ timestamp.</p>
       <pre class="lines">
 
 
-459
-460
-461
-462
-463
-464
-465
-466
-467
-468
-469
-470
-471
-472
-473
-474
-475</pre>
+512
+513
+514
+515
+516
+517
+518
+519
+520
+521
+522
+523
+524
+525
+526
+527
+528</pre>
     </td>
     <td>
-      <pre class="code"><span class="info file"># File 'ext/statsrb/statsrb.c', line 459</span>
+      <pre class="code"><span class="info file"># File 'ext/statsrb/statsrb.c', line 512</span>
 
 static VALUE statsrb_constructor(VALUE self) {
   VALUE statsrb_data = rb_ary_new();
@@ -492,7 +568,8 @@ e.g. [{:ts =&gt; Time.now.to_i, :ns =&gt; "test", :v =&gt; 33}]</p>
 </h3><div class="docstring">
   <div class="discussion">
     
-<p>The max count of @data before flushing and writing to file.</p>
+<p>When used with a rack server, the max count of @data before flushing and
+writing to file.</p>
 
 
   </div>
@@ -576,57 +653,6 @@ e.g. [{:ts =&gt; Time.now.to_i, :ns =&gt; "test", :v =&gt; 33}]</p>
       <pre class="lines">
 
 
-270
-271
-272
-273
-274
-275
-276
-277
-278
-279
-280
-281
-282
-283
-284
-285
-286
-287
-288
-289
-290
-291
-292
-293
-294
-295
-296
-297
-298
-299
-300
-301
-302
-303
-304
-305
-306
-307
-308
-309
-310
-311
-312
-313
-314
-315
-316
-317
-318
-319
-320
 321
 322
 323
@@ -735,10 +761,63 @@ e.g. [{:ts =&gt; Time.now.to_i, :ns =&gt; "test", :v =&gt; 33}]</p>
 426
 427
 428
-429</pre>
+429
+430
+431
+432
+433
+434
+435
+436
+437
+438
+439
+440
+441
+442
+443
+444
+445
+446
+447
+448
+449
+450
+451
+452
+453
+454
+455
+456
+457
+458
+459
+460
+461
+462
+463
+464
+465
+466
+467
+468
+469
+470
+471
+472
+473
+474
+475
+476
+477
+478
+479
+480
+481
+482</pre>
     </td>
     <td>
-      <pre class="code"><span class="info file"># File 'ext/statsrb/statsrb.c', line 270</span>
+      <pre class="code"><span class="info file"># File 'ext/statsrb/statsrb.c', line 321</span>
 
 static VALUE statsrb_rack_call(VALUE self, VALUE env) {
   VALUE response = rb_ary_new();
@@ -762,12 +841,14 @@ static VALUE statsrb_rack_call(VALUE self, VALUE env) {
 
   //const char *method = RSTRING_PTR(rb_hash_aref(env, rb_str_new2(&quot;REQUEST_METHOD&quot;)));
   // @TODO consider moving the request method to the proper REQUEST_METHOD
-  const char *method_get = &quot;GET&quot;;
-  const char *method_put = &quot;PUT&quot;;
+  const char *method_get = &quot;get&quot;;
+  const char *method_getu = &quot;GET&quot;;
+  const char *method_put = &quot;put&quot;;
+  const char *method_putu = &quot;PUT&quot;;
   // Remove the leading /
   path++;
   const char *method = strtok(path, &quot;/\0&quot;);
-  if (method &amp;&amp; strcmp(method, method_put) == 0) {
+  if (method &amp;&amp; (strcmp(method, method_put) == 0 || strcmp(method, method_putu) == 0)) {
     long int statsrb_ts, statsrb_v;
 
     // Get the timestamp, default to now.
@@ -810,7 +891,7 @@ static VALUE statsrb_rack_call(VALUE self, VALUE env) {
       rb_ary_push(body, statsrb_ns);
     }
   }
-  else if (method &amp;&amp; strcmp(method, method_get) == 0) {
+  else if (method &amp;&amp; (strcmp(method, method_get) == 0 || strcmp(method, method_getu) == 0)) {
     const char * statsrb_str_ns = strtok(NULL, &quot;/\0&quot;);
     if (statsrb_str_ns == NULL) {
       statsrb_str_ns = &quot;data&quot;;
@@ -864,7 +945,7 @@ static VALUE statsrb_rack_call(VALUE self, VALUE env) {
       VALUE tmp = rb_obj_dup(self);
       VALUE tmp_data = rb_ary_new();
       rb_iv_set(tmp, &quot;@data&quot;, tmp_data);
-      statsrb_query(tmp, rb_str_plus(rb_iv_get(self, &quot;@split_file_dir&quot;), statsrb_ns), statsrb_ns, INT2NUM(query_limit), INT2NUM(query_start), INT2NUM(query_end));
+      statsrb_read(tmp, rb_str_plus(rb_iv_get(self, &quot;@split_file_dir&quot;), statsrb_ns), statsrb_ns, INT2NUM(query_limit), INT2NUM(query_start), INT2NUM(query_end));
       statsrb_sort(tmp);
 
       int i, data_length = RARRAY_LEN(tmp_data);
@@ -879,7 +960,7 @@ static VALUE statsrb_rack_call(VALUE self, VALUE env) {
           rb_ary_push(body, rb_str_new(&quot;,&quot;, 1));
         }
         rb_ary_push(body, rb_str_new(&quot;\n&quot;, 1));
-      } 
+      }
       rb_ary_resize(tmp_data, 0);
     }
     rb_ary_push(body, rb_str_new(&quot;]}&quot;, 2));
@@ -899,6 +980,181 @@ static VALUE statsrb_rack_call(VALUE self, VALUE env) {
   rb_ary_push(response, body);
 
   return response;
+}</pre>
+    </td>
+  </tr>
+</table>
+</div>
+    
+      <div class="method_details ">
+  <h3 class="signature " id="get-instance_method">
+  
+    - (<tt>Array</tt>) <strong>get</strong> 
+  
+
+  
+
+  
+</h3><div class="docstring">
+  <div class="discussion">
+    
+<p>Retrieves internal data based on specified filters.</p>
+
+
+  </div>
+</div>
+<div class="tags">
+  <p class="tag_title">Parameters:</p>
+<ul class="param">
+  
+    <li>
+      
+        <span class='name'>namespace</span>
+      
+      
+        <span class='type'>(<tt>String</tt>)</span>
+      
+      
+      
+    </li>
+  
+    <li>
+      
+        <span class='name'>limit</span>
+      
+      
+        <span class='type'>(<tt>Number</tt>)</span>
+      
+      
+      
+    </li>
+  
+    <li>
+      
+        <span class='name'>start_time</span>
+      
+      
+        <span class='type'>(<tt>Number</tt>)</span>
+      
+      
+      
+    </li>
+  
+    <li>
+      
+        <span class='name'>end_time</span>
+      
+      
+        <span class='type'>(<tt>Number</tt>)</span>
+      
+      
+      
+    </li>
+  
+</ul>
+
+<p class="tag_title">Returns:</p>
+<ul class="return">
+  
+    <li>
+      
+      
+        <span class='type'>(<tt>Array</tt>)</span>
+      
+      
+      
+        &mdash;
+        <div class='inline'>
+<p>An array of data hashes.</p>
+</div>
+      
+    </li>
+  
+</ul>
+
+</div><table class="source_code">
+  <tr>
+    <td>
+      <pre class="lines">
+
+
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24
+25
+26
+27
+28
+29
+30
+31
+32
+33
+34
+35
+36
+37
+38
+39
+40
+41
+42
+43
+44
+45
+46
+47
+48
+49
+50</pre>
+    </td>
+    <td>
+      <pre class="code"><span class="info file"># File 'ext/statsrb/statsrb.c', line 14</span>
+
+static VALUE statsrb_get(VALUE self, VALUE query_ns, VALUE query_limit, VALUE query_start, VALUE query_end) {
+  VALUE statsrb_data = rb_iv_get(self, &quot;@data&quot;);
+  VALUE statsrb_event = rb_hash_new();
+  int data_length = RARRAY_LEN(statsrb_data);
+  int i = 0;
+  int count = 0;
+  int tmp_ts;
+
+  VALUE filtered_data = rb_ary_new();
+  VALUE tmp_ns;
+
+  // @data hash key symbols.
+  VALUE statsrb_key_ts = rb_iv_get(self, &quot;@key_ts&quot;);
+  VALUE statsrb_key_ns = rb_iv_get(self, &quot;@key_ns&quot;);
+  VALUE statsrb_key_v = rb_iv_get(self, &quot;@key_v&quot;);
+
+  // Convert into an int that ruby understands.
+  int limit = NUM2INT(query_limit);
+  int qstart = NUM2INT(query_start);
+  int qend = NUM2INT(query_end);
+
+  for (i = 0; i &lt; data_length; i++) {
+    tmp_ts = NUM2INT(rb_hash_aref(rb_ary_entry(statsrb_data, i), statsrb_key_ts));
+    tmp_ns = rb_hash_aref(rb_ary_entry(statsrb_data, i), statsrb_key_ns);
+    if (rb_str_equal(query_ns, tmp_ns)
+        &amp;&amp; (qstart == 0 || tmp_ts &gt;= qstart)
+        &amp;&amp; (qend == 0 || tmp_ts &lt;= qend)) {
+      rb_hash_aset(statsrb_event, statsrb_key_ts, rb_hash_aref(rb_ary_entry(statsrb_data, i), statsrb_key_ts));
+      rb_hash_aset(statsrb_event, statsrb_key_ns, rb_hash_aref(rb_ary_entry(statsrb_data, i), statsrb_key_ns));
+      rb_hash_aset(statsrb_event, statsrb_key_v, rb_hash_aref(rb_ary_entry(statsrb_data, i), statsrb_key_v));
+      rb_ary_push(filtered_data, statsrb_event);
+      count++;
+    }
+  }
+
+  return filtered_data;
 }</pre>
     </td>
   </tr>
@@ -986,26 +1242,26 @@ static VALUE statsrb_rack_call(VALUE self, VALUE env) {
       <pre class="lines">
 
 
-438
-439
-440
-441
-442
-443
-444
-445
-446
-447
-448
-449
-450
-451
-452
-453
-454</pre>
+491
+492
+493
+494
+495
+496
+497
+498
+499
+500
+501
+502
+503
+504
+505
+506
+507</pre>
     </td>
     <td>
-      <pre class="code"><span class="info file"># File 'ext/statsrb/statsrb.c', line 438</span>
+      <pre class="code"><span class="info file"># File 'ext/statsrb/statsrb.c', line 491</span>
 
 static VALUE statsrb_push(VALUE self, VALUE timestamp, VALUE namespace, VALUE value) {
   VALUE statsrb_data = rb_iv_get(self, &quot;@data&quot;);
@@ -1132,52 +1388,6 @@ static VALUE statsrb_push(VALUE self, VALUE timestamp, VALUE namespace, VALUE va
       <pre class="lines">
 
 
-15
-16
-17
-18
-19
-20
-21
-22
-23
-24
-25
-26
-27
-28
-29
-30
-31
-32
-33
-34
-35
-36
-37
-38
-39
-40
-41
-42
-43
-44
-45
-46
-47
-48
-49
-50
-51
-52
-53
-54
-55
-56
-57
-58
-59
-60
 61
 62
 63
@@ -1209,12 +1419,58 @@ static VALUE statsrb_push(VALUE self, VALUE timestamp, VALUE namespace, VALUE va
 89
 90
 91
-92</pre>
+92
+93
+94
+95
+96
+97
+98
+99
+100
+101
+102
+103
+104
+105
+106
+107
+108
+109
+110
+111
+112
+113
+114
+115
+116
+117
+118
+119
+120
+121
+122
+123
+124
+125
+126
+127
+128
+129
+130
+131
+132
+133
+134
+135
+136
+137
+138</pre>
     </td>
     <td>
-      <pre class="code"><span class="info file"># File 'ext/statsrb/statsrb.c', line 15</span>
+      <pre class="code"><span class="info file"># File 'ext/statsrb/statsrb.c', line 61</span>
 
-static VALUE statsrb_query(VALUE self, VALUE logfile, VALUE query_ns, VALUE query_limit, VALUE query_start, VALUE query_end) {
+static VALUE statsrb_read(VALUE self, VALUE logfile, VALUE query_ns, VALUE query_limit, VALUE query_start, VALUE query_end) {
   FILE * file;
   int line_size = 256;
   char *line = (char *) malloc(line_size);
@@ -1241,13 +1497,13 @@ static VALUE statsrb_query(VALUE self, VALUE logfile, VALUE query_ns, VALUE quer
   file = fopen(filepath, &quot;r&quot;);
   if (file == NULL) {
     fprintf(stderr, &quot;File error: could not open file %s for reading.&quot;, filepath);
-    return;
+    return self;
   }
 
   int count = 0;
 
   while (NULL != fgets(line, line_size, file) &amp;&amp; count &lt; limit) {
-    // strstr doesn't work with newline chars. 
+    // strstr doesn't work with newline chars.
     size_t len = strlen(line) - 1;
     if (line[len] == '\n');
         line[len] = '\0';
@@ -1268,7 +1524,275 @@ static VALUE statsrb_query(VALUE self, VALUE logfile, VALUE query_ns, VALUE quer
         VALUE statsrb_str_ns = rb_str_new2(strtok(NULL, &quot;\t&quot;));
         //strtok(NULL, &quot;\t&quot;);
         int statsrb_v = atoi(strtok(NULL, &quot;\0&quot;));
+
+        // @TODO this should really query the namespace exactly instead of just relying on strstr.
+        //if (rb_str_cmp(query_ns, statsrb_str_empty) == 0 || rb_str_cmp(query_ns, statsrb_str_ns) == 0) {
+        if (statsrb_ts &amp;&amp; (statsrb_v || statsrb_v == 0)) {
+          rb_hash_aset(statsrb_event, statsrb_key_ts, INT2NUM(statsrb_ts));
+          rb_hash_aset(statsrb_event, statsrb_key_ns, statsrb_str_ns);
+          //rb_hash_aset(statsrb_event, statsrb_key_ns, query_ns);
+          rb_hash_aset(statsrb_event, statsrb_key_v, INT2NUM(statsrb_v));
+          rb_ary_push(statsrb_data, statsrb_event);
+          count++;
+        }
+      }
+    }
+  }
+
+  // terminate
+  fclose (file);
+  free (line);
+
+  //return statsrb_data;
+  //rb_iv_set(self, &quot;@data&quot;, statsrb_data);
+
+  return self;
+}</pre>
+    </td>
+  </tr>
+</table>
+</div>
+    
+      <div class="method_details ">
+  <h3 class="signature " id="read-instance_method">
   
+    - (<tt><span class='object_link'><a href="" title="Statsrb (class)">Statsrb</a></span></tt>) <strong>read</strong> 
+  
+
+  
+
+  
+</h3><div class="docstring">
+  <div class="discussion">
+    
+<p>Locates data from a specified file and loads into @data.</p>
+
+
+  </div>
+</div>
+<div class="tags">
+  <p class="tag_title">Parameters:</p>
+<ul class="param">
+  
+    <li>
+      
+        <span class='name'>filepath</span>
+      
+      
+        <span class='type'>(<tt>String</tt>)</span>
+      
+      
+      
+    </li>
+  
+    <li>
+      
+        <span class='name'>namespace</span>
+      
+      
+        <span class='type'>(<tt>String</tt>)</span>
+      
+      
+      
+    </li>
+  
+    <li>
+      
+        <span class='name'>limit</span>
+      
+      
+        <span class='type'>(<tt>Number</tt>)</span>
+      
+      
+      
+    </li>
+  
+    <li>
+      
+        <span class='name'>start_time</span>
+      
+      
+        <span class='type'>(<tt>Number</tt>)</span>
+      
+      
+      
+    </li>
+  
+    <li>
+      
+        <span class='name'>end_time</span>
+      
+      
+        <span class='type'>(<tt>Number</tt>)</span>
+      
+      
+      
+    </li>
+  
+</ul>
+
+<p class="tag_title">Returns:</p>
+<ul class="return">
+  
+    <li>
+      
+      
+        <span class='type'>(<tt><span class='object_link'><a href="" title="Statsrb (class)">Statsrb</a></span></tt>)</span>
+      
+      
+      
+        &mdash;
+        <div class='inline'>
+<p>A reference to the object.</p>
+</div>
+      
+    </li>
+  
+</ul>
+
+</div><table class="source_code">
+  <tr>
+    <td>
+      <pre class="lines">
+
+
+61
+62
+63
+64
+65
+66
+67
+68
+69
+70
+71
+72
+73
+74
+75
+76
+77
+78
+79
+80
+81
+82
+83
+84
+85
+86
+87
+88
+89
+90
+91
+92
+93
+94
+95
+96
+97
+98
+99
+100
+101
+102
+103
+104
+105
+106
+107
+108
+109
+110
+111
+112
+113
+114
+115
+116
+117
+118
+119
+120
+121
+122
+123
+124
+125
+126
+127
+128
+129
+130
+131
+132
+133
+134
+135
+136
+137
+138</pre>
+    </td>
+    <td>
+      <pre class="code"><span class="info file"># File 'ext/statsrb/statsrb.c', line 61</span>
+
+static VALUE statsrb_read(VALUE self, VALUE logfile, VALUE query_ns, VALUE query_limit, VALUE query_start, VALUE query_end) {
+  FILE * file;
+  int line_size = 256;
+  char *line = (char *) malloc(line_size);
+  const char *filepath = RSTRING_PTR(logfile);
+  const char *query_ns_char = RSTRING_PTR(query_ns);
+
+  // @data hash key symbols.
+  VALUE statsrb_key_ts = rb_iv_get(self, &quot;@key_ts&quot;);
+  VALUE statsrb_key_ns = rb_iv_get(self, &quot;@key_ns&quot;);
+  VALUE statsrb_key_v = rb_iv_get(self, &quot;@key_v&quot;);
+  // Create an empty string for comparison.
+  VALUE statsrb_str_empty = rb_str_new2(&quot;&quot;);
+
+  // Convert into an int that ruby understands.
+  int limit = NUM2INT(query_limit);
+  int qstart = NUM2INT(query_start);
+  int qend = NUM2INT(query_end);
+
+  // Return array instantiation.
+  VALUE statsrb_data = rb_iv_get(self, &quot;@data&quot;);
+  // @TODO does this garbage collect all of the old hash data?
+  rb_ary_resize(statsrb_data, 0);
+
+  file = fopen(filepath, &quot;r&quot;);
+  if (file == NULL) {
+    fprintf(stderr, &quot;File error: could not open file %s for reading.&quot;, filepath);
+    return self;
+  }
+
+  int count = 0;
+
+  while (NULL != fgets(line, line_size, file) &amp;&amp; count &lt; limit) {
+    // strstr doesn't work with newline chars.
+    size_t len = strlen(line) - 1;
+    if (line[len] == '\n');
+        line[len] = '\0';
+
+    // If the namespace is in the row, explode it.
+    if (line[0] != '\0' &amp;&amp; line[0] != '\n' &amp;&amp; strchr(line, query_ns_char[0]) &amp;&amp; strstr(line, query_ns_char)) {
+      VALUE statsrb_event = rb_hash_new();
+
+      // I tried sscanf for convenience, but it was predictably slower.
+      //int statsrb_ts, statsrb_v;
+      //sscanf(line, &quot;%d\t%*s\t%d&quot;, &amp;statsrb_ts, &amp;statsrb_v);
+
+      // @TODO this should something more robust than atoi.
+      int statsrb_ts = atoi(strtok(line, &quot;\t&quot;));
+
+      if (statsrb_ts != NULL &amp;&amp; (qstart == 0 || statsrb_ts &gt;= qstart) &amp;&amp; (qend == 0 || statsrb_ts &lt;= qend)) {
+        // @TODO this should probably use the actual namespace if we do wildcard queries.
+        VALUE statsrb_str_ns = rb_str_new2(strtok(NULL, &quot;\t&quot;));
+        //strtok(NULL, &quot;\t&quot;);
+        int statsrb_v = atoi(strtok(NULL, &quot;\0&quot;));
+
         // @TODO this should really query the namespace exactly instead of just relying on strstr.
         //if (rb_str_cmp(query_ns, statsrb_str_empty) == 0 || rb_str_cmp(query_ns, statsrb_str_ns) == 0) {
         if (statsrb_ts &amp;&amp; (statsrb_v || statsrb_v == 0)) {
@@ -1342,18 +1866,18 @@ timestamp.</p>
       <pre class="lines">
 
 
-132
-133
-134
-135
-136
-137
-138
-139
-140</pre>
+178
+179
+180
+181
+182
+183
+184
+185
+186</pre>
     </td>
     <td>
-      <pre class="code"><span class="info file"># File 'ext/statsrb/statsrb.c', line 132</span>
+      <pre class="code"><span class="info file"># File 'ext/statsrb/statsrb.c', line 178</span>
 
 static VALUE statsrb_sort(VALUE self) {
   VALUE statsrb_data = rb_iv_get(self, &quot;@data&quot;);
@@ -1472,46 +1996,51 @@ static VALUE statsrb_sort(VALUE self) {
       <pre class="lines">
 
 
-194
-195
-196
-197
-198
-199
-200
-201
-202
-203
-204
-205
-206
-207
-208
-209
-210
-211
-212
-213
-214
-215
-216
-217
-218
-219
-220
-221
-222
-223
-224
-225
-226
-227
-228
-229
-230</pre>
+240
+241
+242
+243
+244
+245
+246
+247
+248
+249
+250
+251
+252
+253
+254
+255
+256
+257
+258
+259
+260
+261
+262
+263
+264
+265
+266
+267
+268
+269
+270
+271
+272
+273
+274
+275
+276
+277
+278
+279
+280
+281</pre>
     </td>
     <td>
-      <pre class="code"><span class="info file"># File 'ext/statsrb/statsrb.c', line 194</span>
+      <pre class="code"><span class="info file"># File 'ext/statsrb/statsrb.c', line 240</span>
 
 static VALUE statsrb_split_write(VALUE self, VALUE logdir, VALUE mode) {
   VALUE statsrb_data = rb_iv_get(self, &quot;@data&quot;);
@@ -1544,7 +2073,12 @@ static VALUE statsrb_split_write(VALUE self, VALUE logdir, VALUE mode) {
     //fputs (RSTRING_PTR(rb_obj_as_string(INT2NUM(RARRAY_LEN(tmp_data)))),stderr);
     rb_iv_set(tmp, &quot;@data&quot;, tmp_data);
 
-    // @todo, throw an exception if no trailing slash... or add one
+    // If there is no trailing slash on the log dir, add one.
+    const char *filepath = RSTRING_PTR(logdir);
+    size_t len = strlen(filepath);
+    if (filepath[len - 1] != '/') {
+      logdir = rb_str_plus(logdir, rb_str_new2(&quot;/&quot;));
+    }
     statsrb_write(tmp, rb_str_plus(logdir, rb_ary_entry(ns_list, i)), mode);
   }
 
@@ -1625,45 +2159,45 @@ static VALUE statsrb_split_write(VALUE self, VALUE logdir, VALUE mode) {
       <pre class="lines">
 
 
-148
-149
-150
-151
-152
-153
-154
-155
-156
-157
-158
-159
-160
-161
-162
-163
-164
-165
-166
-167
-168
-169
-170
-171
-172
-173
-174
-175
-176
-177
-178
-179
-180
-181
-182
-183</pre>
+194
+195
+196
+197
+198
+199
+200
+201
+202
+203
+204
+205
+206
+207
+208
+209
+210
+211
+212
+213
+214
+215
+216
+217
+218
+219
+220
+221
+222
+223
+224
+225
+226
+227
+228
+229</pre>
     </td>
     <td>
-      <pre class="code"><span class="info file"># File 'ext/statsrb/statsrb.c', line 148</span>
+      <pre class="code"><span class="info file"># File 'ext/statsrb/statsrb.c', line 194</span>
 
 static VALUE statsrb_write(VALUE self, VALUE logfile, VALUE mode) {
   FILE * file;
@@ -1675,7 +2209,7 @@ static VALUE statsrb_write(VALUE self, VALUE logfile, VALUE mode) {
   int line_size = 256;
   int tmp_ts, tmp_v;
   const char *tmp_ns = (char *) malloc(line_size);
-  
+
   // @data hash key symbols.
   VALUE statsrb_key_ts = rb_iv_get(self, &quot;@key_ts&quot;);
   VALUE statsrb_key_ns = rb_iv_get(self, &quot;@key_ns&quot;);
@@ -1684,7 +2218,7 @@ static VALUE statsrb_write(VALUE self, VALUE logfile, VALUE mode) {
   file = fopen(filepath, filemode);
   if (file==NULL) {
     fprintf(stderr, &quot;File error: could not open file %s mode %s.&quot;, filepath, filemode);
-    return;
+    return self;
   }
 
   // Iterate through the data array, writing the data as we go.
@@ -1711,7 +2245,7 @@ static VALUE statsrb_write(VALUE self, VALUE logfile, VALUE mode) {
 </div>
 
     <div id="footer">
-  Generated on Sat Jun  8 18:02:55 2013 by
+  Generated on Tue Jun 11 10:44:06 2013 by
   <a href="http://yardoc.org" title="Yay! A Ruby Documentation Tool" target="_parent">yard</a>
   0.8.6.1 (ruby-1.9.3).
 </div>
