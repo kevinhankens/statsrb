@@ -85,7 +85,7 @@ static VALUE statsrb_read(VALUE self, VALUE logfile, VALUE query_ns, VALUE query
   file = fopen(filepath, "r");
   if (file == NULL) {
     fprintf(stderr, "File error: could not open file %s for reading.", filepath);
-    return;
+    return self;
   }
 
   int count = 0;
@@ -210,7 +210,7 @@ static VALUE statsrb_write(VALUE self, VALUE logfile, VALUE mode) {
   file = fopen(filepath, filemode);
   if (file==NULL) {
     fprintf(stderr, "File error: could not open file %s mode %s.", filepath, filemode);
-    return;
+    return self;
   }
 
   // Iterate through the data array, writing the data as we go.
