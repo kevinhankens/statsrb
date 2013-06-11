@@ -10,7 +10,7 @@ The philosophy behind statsrb is that you can leverage the speed of a gem writte
 
 As evidenced by the version number, this project is just getting started. Please feel free to submit issues or pull requests... any help would be appreciated :)
 
-Current Version 0.1.3
+Current Version 0.1.4
 
 Installation
 ------------
