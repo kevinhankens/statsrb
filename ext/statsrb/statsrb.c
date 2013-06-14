@@ -509,6 +509,9 @@ static VALUE statsrb_push(VALUE self, VALUE timestamp, VALUE namespace, VALUE va
   return self;
 }
 
+/**
+ * Keeps track of a single event.
+ */
 typedef struct {
   char *namespace[256];
   int timestamp;
@@ -520,41 +523,60 @@ typedef struct {
  */
 static void statsrb_data_push_event(VALUE self, const char *namespace, int timestamp, int value) {
   StatsrbEvent *internal = rb_iv_get(self, "@internal");
-  int count = rb_iv_get(self, "@count");
-fprintf(stdout, "push %s %d %d\n", namespace, timestamp, value);
-fprintf(stdout, "push count: %d internal: %d\n", count, sizeof(internal));
+  // For some weird reason, we can't rely on rb_iv_get to keep track of the value,
+  // so we'll just make new pointers for each increment. Stupid, yes.
+  int *iv_count = rb_iv_get(self, "@count");
+  int count = *iv_count;
+  iv_count = NULL;
+  int memory = rb_iv_get(self, "@memory");
 
-//int i;
-//for (i = 0; i < 3; i++) {
-  StatsrbEvent *success = (StatsrbEvent *)realloc(internal, (count + 1) * sizeof(StatsrbEvent));
-  if (success) {
-fprintf(stdout, "sizeofi count: %d success: %d size: %d\n", count, success, (count + 1) * sizeof(StatsrbEvent));
-    internal = success;
-    success = NULL;
-    //StatsrbEvent internal[count];
-    internal[count].timestamp = timestamp;
-    strcpy(internal[count].namespace, namespace);
-    internal[count].value = value;
-fprintf(stdout, "debugz: %d %s %d\n", internal[0].timestamp, internal[0].namespace, internal[0].value);
-fprintf(stdout, "debugs: %d %s %d\n", internal[count].timestamp, internal[count].namespace, internal[count].value);
-  }
-  else {
-    fprintf(stderr, "Error allocating memory");
+  // If it appears that we are approaching the end of the memory block, allocate
+  // some more.
+  // @TODO 2x memory is a little nuts, maybe throttle this back a bit?
+  if ((sizeof(StatsrbEvent) * count) > (memory * .9)) {
+    memory = (2* count) * sizeof(StatsrbEvent);
+    StatsrbEvent *success = (StatsrbEvent *)realloc(internal, memory);
+    if (success) {
+      internal = success;
+      success = NULL;
+      // Make sure to track our usage.
+      // @TODO this surely isn't ideal, but not sure how get sizeof(*)
+      rb_iv_set(self, "@internal", internal);
+      rb_iv_set(self, "@memory", memory);
+    }
+    else {
+      fprintf(stderr, "Error allocating memory");
+      return;
+    }
   }
 
+  // Set the values;
+  internal[count].timestamp = timestamp;
+  strcpy(internal[count].namespace, namespace);
+  internal[count].value = value;
+
+  // Track the count by saving the new pointer.
   count++;
-  rb_iv_set(self, "@internal", internal);
-  rb_iv_set(self, "@count", count);
+  rb_iv_set(self, "@count", &count);
 
-//}
 }
 
+/**
+ * Debugging function.
+ */
 static void statsrb_debug_print_internal(VALUE self) {
-  StatsrbEvent (*internal)[] = rb_iv_get(self, "@internal");
-  int count = rb_iv_get(self, "@count");
-
-  //fprintf(stdout, "debugv: %d\n", internal[count].value);
-  // fprintf(stdout, "debug ns: %s; ts: %d; v: %d\n", internal[0]->namespace, internal[0]->timestamp, internal[0]->value);
+  StatsrbEvent *internal = rb_iv_get(self, "@internal");
+  int *iv_count = rb_iv_get(self, "@count");
+  int count = *iv_count;
+  iv_count = NULL;
+  int i;
+  int memory = rb_iv_get(self, "@memory");
+  
+  fprintf(stdout, "Debug: %d items:\n", count);
+  for (i = 0; i < count; i++) {
+    fprintf(stdout, "Debug: ns: %s; ts: %d; v: %d\n", internal[i].namespace, internal[i].timestamp, internal[i].value);
+  }
+  fprintf(stdout, "Debug: %d memory:\n", memory);
 }
 
 /**
@@ -569,16 +591,17 @@ static VALUE statsrb_constructor(VALUE self) {
 
   StatsrbEvent *internal = (StatsrbEvent *)calloc(1, sizeof(StatsrbEvent));
   rb_iv_set(self, "@internal", internal);
+  rb_iv_set(self, "@memory", sizeof(StatsrbEvent));
   int count = 0;
-  rb_iv_set(self, "@count", count);
+  int *iv_count = &count;
+  rb_iv_set(self, "@count", iv_count);
 fprintf(stdout, "init count: %d internal: %d\n", count, internal);
 
-statsrb_data_push_event(self, "kevin", 12345, 123);
-statsrb_data_push_event(self, "kevin", 23456, 234);
-statsrb_data_push_event(self, "kevin", 34567, 345);
-statsrb_data_push_event(self, "kevin", 45678, 456);
-statsrb_data_push_event(self, "kevin", 56789, 567);
-//statsrb_debug_print_internal(self);
+int i;
+for (i = 0; i < 10000; i++) {
+statsrb_data_push_event(self, "kevin", i + 100, i);
+}
+statsrb_debug_print_internal(self);
 
   // Internal symbols for :ts, :ns and :v.
   VALUE statsrb_key_ts = rb_str_intern(rb_str_new2("ts"));
@@ -619,4 +642,5 @@ void Init_statsrb(void) {
   // Use a private property as internal storage.
   rb_define_attr(klass, "internal", 0, 0);
   rb_define_attr(klass, "count", 0, 0);
+  rb_define_attr(klass, "memory", 0, 0);
 }
