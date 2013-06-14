@@ -19,6 +19,9 @@ static VALUE statsrb_get(VALUE self, VALUE query_ns, VALUE query_limit, VALUE qu
   int count = 0;
   int tmp_ts;
 
+
+  char *internal = rb_iv_get(self, "@internal");
+
   VALUE filtered_data = rb_ary_new();
   VALUE tmp_ns;
 
@@ -506,6 +509,54 @@ static VALUE statsrb_push(VALUE self, VALUE timestamp, VALUE namespace, VALUE va
   return self;
 }
 
+typedef struct {
+  char *namespace[256];
+  int timestamp;
+  int value;
+} StatsrbEvent;
+
+/**
+ * Pushes a data event onto the internal storage array.
+ */
+static void statsrb_data_push_event(VALUE self, const char *namespace, int timestamp, int value) {
+  StatsrbEvent *internal = rb_iv_get(self, "@internal");
+  int count = rb_iv_get(self, "@count");
+fprintf(stdout, "push %s %d %d\n", namespace, timestamp, value);
+fprintf(stdout, "push count: %d internal: %d\n", count, sizeof(internal));
+
+//int i;
+//for (i = 0; i < 3; i++) {
+  StatsrbEvent *success = (StatsrbEvent *)realloc(internal, (count + 1) * sizeof(StatsrbEvent));
+  if (success) {
+fprintf(stdout, "sizeofi count: %d success: %d size: %d\n", count, success, (count + 1) * sizeof(StatsrbEvent));
+    internal = success;
+    success = NULL;
+    //StatsrbEvent internal[count];
+    internal[count].timestamp = timestamp;
+    strcpy(internal[count].namespace, namespace);
+    internal[count].value = value;
+fprintf(stdout, "debugz: %d %s %d\n", internal[0].timestamp, internal[0].namespace, internal[0].value);
+fprintf(stdout, "debugs: %d %s %d\n", internal[count].timestamp, internal[count].namespace, internal[count].value);
+  }
+  else {
+    fprintf(stderr, "Error allocating memory");
+  }
+
+  count++;
+  rb_iv_set(self, "@internal", internal);
+  rb_iv_set(self, "@count", count);
+
+//}
+}
+
+static void statsrb_debug_print_internal(VALUE self) {
+  StatsrbEvent (*internal)[] = rb_iv_get(self, "@internal");
+  int count = rb_iv_get(self, "@count");
+
+  //fprintf(stdout, "debugv: %d\n", internal[count].value);
+  // fprintf(stdout, "debug ns: %s; ts: %d; v: %d\n", internal[0]->namespace, internal[0]->timestamp, internal[0]->value);
+}
+
 /**
  * Class constructor, sets up an instance variable.
  */
@@ -515,6 +566,19 @@ static VALUE statsrb_constructor(VALUE self) {
   VALUE statsrb_split_file_dir = rb_str_new("/tmp", 4);
   rb_iv_set(self, "@split_file_dir", statsrb_split_file_dir);
   rb_iv_set(self, "@flush_count", INT2NUM(9));
+
+  StatsrbEvent *internal = (StatsrbEvent *)calloc(1, sizeof(StatsrbEvent));
+  rb_iv_set(self, "@internal", internal);
+  int count = 0;
+  rb_iv_set(self, "@count", count);
+fprintf(stdout, "init count: %d internal: %d\n", count, internal);
+
+statsrb_data_push_event(self, "kevin", 12345, 123);
+statsrb_data_push_event(self, "kevin", 23456, 234);
+statsrb_data_push_event(self, "kevin", 34567, 345);
+statsrb_data_push_event(self, "kevin", 45678, 456);
+statsrb_data_push_event(self, "kevin", 56789, 567);
+//statsrb_debug_print_internal(self);
 
   // Internal symbols for :ts, :ns and :v.
   VALUE statsrb_key_ts = rb_str_intern(rb_str_new2("ts"));
@@ -552,4 +616,7 @@ void Init_statsrb(void) {
   rb_define_attr(klass, "split_file_dir", 1, 1);
   // When used with a rack server, the max count of @data before flushing and writing to file.
   rb_define_attr(klass, "flush_count", 1, 1);
+  // Use a private property as internal storage.
+  rb_define_attr(klass, "internal", 0, 0);
+  rb_define_attr(klass, "count", 0, 0);
 }
