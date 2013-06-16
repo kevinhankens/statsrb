@@ -4,55 +4,6 @@
 #include <stdlib.h>
 
 /**
- * Retrieves internal data based on specified filters.
- * @param namespace [String]
- * @param limit [Number]
- * @param start_time [Number]
- * @param end_time [Number]
- * @return [Array] An array of data hashes.
- */
-static VALUE statsrb_get(VALUE self, VALUE query_ns, VALUE query_limit, VALUE query_start, VALUE query_end) {
-  VALUE statsrb_data = rb_iv_get(self, "@data");
-  VALUE statsrb_event = rb_hash_new();
-  int data_length = RARRAY_LEN(statsrb_data);
-  int i = 0;
-  int count = 0;
-  int tmp_ts;
-
-
-  char *internal = rb_iv_get(self, "@internal");
-
-  VALUE filtered_data = rb_ary_new();
-  VALUE tmp_ns;
-
-  // @data hash key symbols.
-  VALUE statsrb_key_ts = rb_iv_get(self, "@key_ts");
-  VALUE statsrb_key_ns = rb_iv_get(self, "@key_ns");
-  VALUE statsrb_key_v = rb_iv_get(self, "@key_v");
-
-  // Convert into an int that ruby understands.
-  int limit = NUM2INT(query_limit);
-  int qstart = NUM2INT(query_start);
-  int qend = NUM2INT(query_end);
-
-  for (i = 0; i < data_length; i++) {
-    tmp_ts = NUM2INT(rb_hash_aref(rb_ary_entry(statsrb_data, i), statsrb_key_ts));
-    tmp_ns = rb_hash_aref(rb_ary_entry(statsrb_data, i), statsrb_key_ns);
-    if (rb_str_equal(query_ns, tmp_ns)
-        && (qstart == 0 || tmp_ts >= qstart)
-        && (qend == 0 || tmp_ts <= qend)) {
-      rb_hash_aset(statsrb_event, statsrb_key_ts, rb_hash_aref(rb_ary_entry(statsrb_data, i), statsrb_key_ts));
-      rb_hash_aset(statsrb_event, statsrb_key_ns, rb_hash_aref(rb_ary_entry(statsrb_data, i), statsrb_key_ns));
-      rb_hash_aset(statsrb_event, statsrb_key_v, rb_hash_aref(rb_ary_entry(statsrb_data, i), statsrb_key_v));
-      rb_ary_push(filtered_data, statsrb_event);
-      count++;
-    }
-  }
-
-  return filtered_data;
-}
-
-/**
  * Locates data from a specified file and loads into @data.
  * @param filepath [String]
  * @param namespace [String]
@@ -519,16 +470,19 @@ typedef struct {
 } StatsrbEvent;
 
 /**
- * Pushes a data event onto the internal storage array.
+ * Pushes a data event onto the internal storage.
+ *
+ * @param VALUE self
+ * @param const char *namespace
+ * @param int timestamp
+ * @param int value
  */
 static void statsrb_data_push_event(VALUE self, const char *namespace, int timestamp, int value) {
   StatsrbEvent *internal = rb_iv_get(self, "@internal");
   // For some weird reason, we can't rely on rb_iv_get to keep track of the value,
   // so we'll just make new pointers for each increment. Stupid, yes.
-  int *iv_count = rb_iv_get(self, "@count");
-  int count = *iv_count;
-  iv_count = NULL;
-  int memory = rb_iv_get(self, "@memory");
+  int count = NUM2INT(rb_iv_get(self, "@count"));
+  int memory = NUM2INT(rb_iv_get(self, "@memory"));
 
   // If it appears that we are approaching the end of the memory block, allocate
   // some more.
@@ -542,7 +496,7 @@ static void statsrb_data_push_event(VALUE self, const char *namespace, int times
       // Make sure to track our usage.
       // @TODO this surely isn't ideal, but not sure how get sizeof(*)
       rb_iv_set(self, "@internal", internal);
-      rb_iv_set(self, "@memory", memory);
+      rb_iv_set(self, "@memory", INT2NUM(memory));
     }
     else {
       fprintf(stderr, "Error allocating memory");
@@ -557,8 +511,68 @@ static void statsrb_data_push_event(VALUE self, const char *namespace, int times
 
   // Track the count by saving the new pointer.
   count++;
-  rb_iv_set(self, "@count", &count);
+  rb_iv_set(self, "@count", INT2NUM(count));
+}
 
+VALUE statsrb_create_rb_event_hash(VALUE self, VALUE ts, VALUE ns, VALUE v) {
+  // @data hash key symbols.
+  VALUE statsrb_key_ts = rb_iv_get(self, "@key_ts");
+  VALUE statsrb_key_ns = rb_iv_get(self, "@key_ns");
+  VALUE statsrb_key_v = rb_iv_get(self, "@key_v");
+
+  VALUE statsrb_event = rb_hash_new();
+  rb_hash_aset(statsrb_event, statsrb_key_ts, ts);
+  rb_hash_aset(statsrb_event, statsrb_key_ns, ns);
+  rb_hash_aset(statsrb_event, statsrb_key_v, v);
+
+  return statsrb_event;
+}
+
+/**
+ * Retrieves internal data based on specified filters.
+ * @param namespace [String]
+ * @param limit [Number]
+ * @param start_time [Number]
+ * @param end_time [Number]
+ * @return [Array] An array of data hashes.
+ */
+static VALUE statsrb_get(VALUE self, VALUE query_ns, VALUE query_limit, VALUE query_start, VALUE query_end) {
+  StatsrbEvent *internal = rb_iv_get(self, "@internal");
+  int count = NUM2INT(rb_iv_get(self, "@count"));
+
+  VALUE filtered_data = rb_ary_new();
+  VALUE statsrb_event;
+
+  int i = 0;
+  int filtered_count = 0;
+
+  int limit = NUM2INT(query_limit);
+  int qstart = NUM2INT(query_start);
+  int qend = NUM2INT(query_end);
+
+  for (i = 0; i < count; i++) {
+    if (strcmp(query_ns, internal[i].namespace)
+        && (qstart == 0 || internal[i].timestamp >= qstart)
+        && (qend == 0 || internal[i].timestamp <= qend)) {
+
+      statsrb_event = statsrb_create_rb_event_hash(
+        self,
+        INT2NUM(internal[i].timestamp),
+        rb_str_new2(internal[i].namespace),
+        INT2NUM(internal[i].value)
+      );
+
+      rb_ary_push(filtered_data, statsrb_event);
+
+      filtered_count++;
+    }
+
+    if (limit > 0 && filtered_count == limit) {
+      break;
+    }
+  }
+
+  return filtered_data;
 }
 
 /**
@@ -566,17 +580,24 @@ static void statsrb_data_push_event(VALUE self, const char *namespace, int times
  */
 static void statsrb_debug_print_internal(VALUE self) {
   StatsrbEvent *internal = rb_iv_get(self, "@internal");
-  int *iv_count = rb_iv_get(self, "@count");
-  int count = *iv_count;
-  iv_count = NULL;
+  int count = NUM2INT(rb_iv_get(self, "@count"));
   int i;
-  int memory = rb_iv_get(self, "@memory");
+  int memory = NUM2INT(rb_iv_get(self, "@memory"));
   
-  fprintf(stdout, "Debug: %d items:\n", count);
-  for (i = 0; i < count; i++) {
-    fprintf(stdout, "Debug: ns: %s; ts: %d; v: %d\n", internal[i].namespace, internal[i].timestamp, internal[i].value);
+  //for (i = 0; i < count; i++) {
+    //fprintf(stdout, "Debug: ns: %s; ts: %d; v: %d\n", internal[i].namespace, internal[i].timestamp, internal[i].value);
+  //}
+  fprintf(stdout, "Debug: count: %d memory: %d\n", count, memory);
+}
+
+static void statsrb_load_test(VALUE self, VALUE amt) {
+  int i;
+  for (i = 0; i < NUM2INT(amt); i++) {
+    statsrb_data_push_event(self, "kevin", i + 100, i);
   }
-  fprintf(stdout, "Debug: %d memory:\n", memory);
+  statsrb_debug_print_internal(self);
+  int ctest = NUM2INT(rb_iv_get(self, "@count"));
+  fprintf(stdout, "Debug: count: %d\n", ctest);
 }
 
 /**
@@ -591,17 +612,8 @@ static VALUE statsrb_constructor(VALUE self) {
 
   StatsrbEvent *internal = (StatsrbEvent *)calloc(1, sizeof(StatsrbEvent));
   rb_iv_set(self, "@internal", internal);
-  rb_iv_set(self, "@memory", sizeof(StatsrbEvent));
-  int count = 0;
-  int *iv_count = &count;
-  rb_iv_set(self, "@count", iv_count);
-fprintf(stdout, "init count: %d internal: %d\n", count, internal);
-
-int i;
-for (i = 0; i < 10000; i++) {
-statsrb_data_push_event(self, "kevin", i + 100, i);
-}
-statsrb_debug_print_internal(self);
+  rb_iv_set(self, "@memory", INT2NUM(sizeof(StatsrbEvent)));
+  rb_iv_set(self, "@count", INT2NUM(0));
 
   // Internal symbols for :ts, :ns and :v.
   VALUE statsrb_key_ts = rb_str_intern(rb_str_new2("ts"));
@@ -626,6 +638,7 @@ void Init_statsrb(void) {
   rb_define_method(klass, "query", statsrb_read, 5);
   rb_define_method(klass, "read", statsrb_read, 5);
   rb_define_method(klass, "get", statsrb_get, 4);
+  rb_define_method(klass, "load_test", statsrb_load_test, 1);
   rb_define_method(klass, "sort", statsrb_sort, 0);
   rb_define_method(klass, "write", statsrb_write, 2);
   rb_define_method(klass, "split_write", statsrb_split_write, 2);
