@@ -436,31 +436,6 @@ static VALUE statsrb_rack_call(VALUE self, VALUE env) {
 }
 
 /**
- * Pushes a stat onto the statsrb object.
- * @param timestamp [Number]
- * @param namespace [String]
- * @param value [Number]
- * @return [Statsrb] A reference to the object.
- */
-static VALUE statsrb_push(VALUE self, VALUE timestamp, VALUE namespace, VALUE value) {
-  VALUE statsrb_data = rb_iv_get(self, "@data");
-  VALUE statsrb_event = rb_hash_new();
-
-  // @data hash key symbols.
-  VALUE statsrb_key_ts = rb_iv_get(self, "@key_ts");
-  VALUE statsrb_key_ns = rb_iv_get(self, "@key_ns");
-  VALUE statsrb_key_v = rb_iv_get(self, "@key_v");
-
-  rb_hash_aset(statsrb_event, statsrb_key_ts, timestamp);
-  rb_hash_aset(statsrb_event, statsrb_key_ns, namespace);
-  rb_hash_aset(statsrb_event, statsrb_key_v, value);
-
-  rb_ary_push(statsrb_data, statsrb_event);
-
-  return self;
-}
-
-/**
  * Keeps track of a single event.
  */
 typedef struct {
@@ -514,6 +489,14 @@ static void statsrb_data_push_event(VALUE self, const char *namespace, int times
   rb_iv_set(self, "@count", INT2NUM(count));
 }
 
+/**
+ * Creates a ruby hash from event VALUEs.
+ *
+ * @param VALUE self
+ * @param VALUE ts
+ * @param VALUE ns
+ * @param VALUE v
+ */
 VALUE statsrb_create_rb_event_hash(VALUE self, VALUE ts, VALUE ns, VALUE v) {
   // @data hash key symbols.
   VALUE statsrb_key_ts = rb_iv_get(self, "@key_ts");
@@ -529,6 +512,21 @@ VALUE statsrb_create_rb_event_hash(VALUE self, VALUE ts, VALUE ns, VALUE v) {
 }
 
 /**
+ * Pushes a stat onto the statsrb object.
+ * @param timestamp [Number]
+ * @param namespace [String]
+ * @param value [Number]
+ * @return [Statsrb] A reference to the object.
+ */
+static VALUE statsrb_push(VALUE self, VALUE timestamp, VALUE namespace, VALUE value) {
+  int ts = NUM2INT(timestamp);
+  int v = NUM2INT(value);
+  const char *ns = RSTRING_PTR(namespace);
+  statsrb_data_push_event(self, ns, ts, v);
+  return self;
+}
+
+/**
  * Retrieves internal data based on specified filters.
  * @param namespace [String]
  * @param limit [Number]
@@ -539,6 +537,7 @@ VALUE statsrb_create_rb_event_hash(VALUE self, VALUE ts, VALUE ns, VALUE v) {
 static VALUE statsrb_get(VALUE self, VALUE query_ns, VALUE query_limit, VALUE query_start, VALUE query_end) {
   StatsrbEvent *internal = rb_iv_get(self, "@internal");
   int count = NUM2INT(rb_iv_get(self, "@count"));
+  char *tmp_ns[256];
 
   VALUE filtered_data = rb_ary_new();
   VALUE statsrb_event;
@@ -551,7 +550,8 @@ static VALUE statsrb_get(VALUE self, VALUE query_ns, VALUE query_limit, VALUE qu
   int qend = NUM2INT(query_end);
 
   for (i = 0; i < count; i++) {
-    if (strcmp(query_ns, internal[i].namespace)
+    strcpy(tmp_ns, RSTRING_PTR(query_ns));
+    if (strcmp(tmp_ns, internal[i].namespace) == 0
         && (qstart == 0 || internal[i].timestamp >= qstart)
         && (qend == 0 || internal[i].timestamp <= qend)) {
 

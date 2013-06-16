@@ -5,11 +5,16 @@ require 'json'
 require 'pp'
 
 s = Statsrb.new
-s.load_test 100000
-a = s.get "kevin", 100, 0, 0
-puts a.length
-pp a
+s.push 12345, "kevin", 123
+s.push 23456, "kevin", 234
+s.push 34567, "kevin", 345
+s.push 45678, "melissa", 456
+s.push 56789, "melissa", 567
+s.push 67899, "melissa", 678
 
-b = s.get "kevin", 300, 0, 0
-puts b.length
-puts b.to_json
+pp s.get "kevin", 100, 0, 0
+
+# s.load_test 100000
+# a = s.get "kevin", 100, 0, 0
+# puts a.length
+# pp a
