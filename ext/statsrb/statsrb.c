@@ -4,6 +4,15 @@
 #include <stdlib.h>
 
 /**
+ * Keeps track of a single event.
+ */
+typedef struct {
+  char *namespace[256];
+  int timestamp;
+  int value;
+} StatsrbEvent;
+
+/**
  * Locates data from a specified file and loads into @data.
  * @param filepath [String]
  * @param namespace [String]
@@ -140,6 +149,152 @@ static VALUE statsrb_sort(VALUE self) {
 }
 
 /**
+ * Pushes a data event onto the internal storage.
+ *
+ * @param VALUE self
+ * @param const char *namespace
+ * @param int timestamp
+ * @param int value
+ */
+static void statsrb_data_push_event(VALUE self, const char *namespace, int timestamp, int value) {
+  StatsrbEvent *internal = rb_iv_get(self, "@internal");
+  // For some weird reason, we can't rely on rb_iv_get to keep track of the value,
+  // so we'll just make new pointers for each increment. Stupid, yes.
+  int count = NUM2INT(rb_iv_get(self, "@count"));
+  int memory = NUM2INT(rb_iv_get(self, "@memory"));
+
+  // If it appears that we are approaching the end of the memory block, allocate
+  // some more.
+  // @TODO 2x memory is a little nuts, maybe throttle this back a bit?
+  if ((sizeof(StatsrbEvent) * count) > (memory * .9)) {
+    memory = (2* count) * sizeof(StatsrbEvent);
+    StatsrbEvent *success = (StatsrbEvent *)realloc(internal, memory);
+    if (success) {
+      internal = success;
+      success = NULL;
+      // Make sure to track our usage.
+      // @TODO this surely isn't ideal, but not sure how get sizeof(*)
+      rb_iv_set(self, "@internal", internal);
+      rb_iv_set(self, "@memory", INT2NUM(memory));
+    }
+    else {
+      fprintf(stderr, "Error allocating memory");
+      return;
+    }
+  }
+
+  // Set the values;
+  internal[count].timestamp = timestamp;
+  strcpy(internal[count].namespace, namespace);
+  internal[count].value = value;
+
+  // Track the count by saving the new pointer.
+  count++;
+  rb_iv_set(self, "@count", INT2NUM(count));
+}
+
+/**
+ * Creates a ruby hash from event VALUEs.
+ *
+ * @param VALUE self
+ * @param VALUE ts
+ * @param VALUE ns
+ * @param VALUE v
+ */
+VALUE statsrb_create_rb_event_hash(VALUE self, VALUE ts, VALUE ns, VALUE v) {
+  // @data hash key symbols.
+  VALUE statsrb_key_ts = rb_iv_get(self, "@key_ts");
+  VALUE statsrb_key_ns = rb_iv_get(self, "@key_ns");
+  VALUE statsrb_key_v = rb_iv_get(self, "@key_v");
+
+  VALUE statsrb_event = rb_hash_new();
+  rb_hash_aset(statsrb_event, statsrb_key_ts, ts);
+  rb_hash_aset(statsrb_event, statsrb_key_ns, ns);
+  rb_hash_aset(statsrb_event, statsrb_key_v, v);
+
+  return statsrb_event;
+}
+
+/**
+ * Pushes a stat onto the statsrb object.
+ * @param timestamp [Number]
+ * @param namespace [String]
+ * @param value [Number]
+ * @return [Statsrb] A reference to the object.
+ */
+static VALUE statsrb_push(VALUE self, VALUE timestamp, VALUE namespace, VALUE value) {
+  int ts = NUM2INT(timestamp);
+  int v = NUM2INT(value);
+  const char *ns = RSTRING_PTR(namespace);
+  statsrb_data_push_event(self, ns, ts, v);
+  return self;
+}
+
+/**
+ * Retrieves internal data based on specified filters.
+ * @param namespace [String]
+ * @param limit [Number]
+ * @param start_time [Number]
+ * @param end_time [Number]
+ * @return [Array] An array of data hashes.
+ */
+static VALUE statsrb_get(VALUE self, VALUE query_ns, VALUE query_limit, VALUE query_start, VALUE query_end) {
+  StatsrbEvent *internal = rb_iv_get(self, "@internal");
+  int count = NUM2INT(rb_iv_get(self, "@count"));
+  char *tmp_ns[256];
+
+  VALUE filtered_data = rb_ary_new();
+  VALUE statsrb_event;
+
+  int i = 0;
+  int filtered_count = 0;
+
+  int limit = NUM2INT(query_limit);
+  int qstart = NUM2INT(query_start);
+  int qend = NUM2INT(query_end);
+
+  for (i = 0; i < count; i++) {
+    strcpy(tmp_ns, RSTRING_PTR(query_ns));
+    if (strcmp(tmp_ns, internal[i].namespace) == 0
+        && (qstart == 0 || internal[i].timestamp >= qstart)
+        && (qend == 0 || internal[i].timestamp <= qend)) {
+
+      statsrb_event = statsrb_create_rb_event_hash(
+        self,
+        INT2NUM(internal[i].timestamp),
+        rb_str_new2(internal[i].namespace),
+        INT2NUM(internal[i].value)
+      );
+
+      rb_ary_push(filtered_data, statsrb_event);
+
+      filtered_count++;
+    }
+
+    if (limit > 0 && filtered_count == limit) {
+      break;
+    }
+  }
+
+  return filtered_data;
+}
+
+/**
+ * Debugging function.
+ */
+static void statsrb_debug_print_internal(VALUE self) {
+  StatsrbEvent *internal = rb_iv_get(self, "@internal");
+  int count = NUM2INT(rb_iv_get(self, "@count"));
+  int i;
+  int memory = NUM2INT(rb_iv_get(self, "@memory"));
+  
+  //for (i = 0; i < count; i++) {
+    //fprintf(stdout, "Debug: ns: %s; ts: %d; v: %d\n", internal[i].namespace, internal[i].timestamp, internal[i].value);
+  //}
+  fprintf(stdout, "Debug: count: %d memory: %d\n", count, memory);
+}
+
+/**
  * Writes the @data in memory to a specified file.
  * @param filepath [String]
  * @param filemode [String]
@@ -149,17 +304,10 @@ static VALUE statsrb_write(VALUE self, VALUE logfile, VALUE mode) {
   FILE * file;
   const char *filepath = RSTRING_PTR(logfile);
   const char *filemode = RSTRING_PTR(mode);
-  VALUE statsrb_data = rb_iv_get(self, "@data");
-  int data_length = RARRAY_LEN(statsrb_data);
-  int i;
-  int line_size = 256;
-  int tmp_ts, tmp_v;
-  const char *tmp_ns = (char *) malloc(line_size);
 
-  // @data hash key symbols.
-  VALUE statsrb_key_ts = rb_iv_get(self, "@key_ts");
-  VALUE statsrb_key_ns = rb_iv_get(self, "@key_ns");
-  VALUE statsrb_key_v = rb_iv_get(self, "@key_v");
+  StatsrbEvent *internal = rb_iv_get(self, "@internal");
+  int count = NUM2INT(rb_iv_get(self, "@count"));
+  int i;
 
   file = fopen(filepath, filemode);
   if (file==NULL) {
@@ -168,14 +316,14 @@ static VALUE statsrb_write(VALUE self, VALUE logfile, VALUE mode) {
   }
 
   // Iterate through the data array, writing the data as we go.
-  for (i = 0; i < data_length; i++) {
+  for (i = 0; i < count; i++) {
     // @TODO make sure that these values are not empty before writing.
-    //VALUE tmp_line = rb_str_tmp_new(line_size);
-    tmp_ts = NUM2INT(rb_hash_aref(rb_ary_entry(statsrb_data, i), statsrb_key_ts));
-    tmp_ns = RSTRING_PTR(rb_hash_aref(rb_ary_entry(statsrb_data, i), statsrb_key_ns));
-    tmp_v = NUM2INT(rb_hash_aref(rb_ary_entry(statsrb_data, i), statsrb_key_v));
-    fprintf(file, "%d\t%s\t%d\n", tmp_ts, tmp_ns, tmp_v);
-    //rb_str_free(tmp_line);
+    fprintf(file, 
+            "%d\t%s\t%d\n", 
+            internal[i].timestamp, 
+            internal[i].namespace, 
+            internal[i].value
+    );
   }
 
   fclose (file);
@@ -192,35 +340,38 @@ static VALUE statsrb_write(VALUE self, VALUE logfile, VALUE mode) {
  * @return [Statsrb] A reference to the object.
 */
 static VALUE statsrb_split_write(VALUE self, VALUE logdir, VALUE mode) {
-  VALUE statsrb_data = rb_iv_get(self, "@data");
-  int len = RARRAY_LEN(statsrb_data);
+  StatsrbEvent *internal = rb_iv_get(self, "@internal");
+  int count = NUM2INT(rb_iv_get(self, "@count"));
   int i, ii, ns_len;
 
-  // @data hash key symbols.
-  VALUE statsrb_key_ts = rb_iv_get(self, "@key_ts");
-  VALUE statsrb_key_ns = rb_iv_get(self, "@key_ns");
-  VALUE statsrb_key_v = rb_iv_get(self, "@key_v");
-
   VALUE ns_list = rb_ary_new();
+  VALUE tmp_ns;
+  VALUE tmp;
+  VALUE klass = rb_obj_class(self);
 
-  for (i = 0; i < len; i++) {
-    if (!rb_ary_includes(ns_list, rb_hash_aref(rb_ary_entry(statsrb_data, i), statsrb_key_ns))) {
-      rb_ary_push(ns_list, rb_hash_aref(rb_ary_entry(statsrb_data, i), statsrb_key_ns));
+  for (i = 0; i < count; i++) {
+    // @TODO this is cause for keeping the namespaces in memory.
+    // @TODO please don't make a new rb_string for each of these :/
+    tmp_ns = rb_str_new2(internal[i].namespace);
+    if (!rb_ary_includes(ns_list, tmp_ns)) {
+      rb_ary_push(ns_list, tmp_ns);
     }
   }
 
   ns_len = RARRAY_LEN(ns_list);
 
   for (i = 0; i < ns_len; i++) {
-    VALUE tmp = rb_obj_dup(self);
-    VALUE tmp_data = rb_ary_new();
-    for (ii = 0; ii < len; ii++) {
-      if (rb_str_cmp(rb_ary_entry(ns_list, i), rb_hash_aref(rb_ary_entry(statsrb_data, ii), statsrb_key_ns)) == 0) {
-        rb_ary_push(tmp_data, rb_ary_entry(statsrb_data, ii));
+    tmp = rb_class_new_instance(0, NULL, klass);
+// @TODO need to free the memory?
+    for (ii = 0; ii < count; ii++) {
+      tmp_ns = rb_str_new2(internal[ii].namespace);
+      if (rb_str_equal(rb_ary_entry(ns_list, i), tmp_ns)) {
+        statsrb_data_push_event(tmp, 
+          internal[ii].namespace, 
+          internal[ii].timestamp, 
+          internal[ii].value);
       }
     }
-    //fputs (RSTRING_PTR(rb_obj_as_string(INT2NUM(RARRAY_LEN(tmp_data)))),stderr);
-    rb_iv_set(tmp, "@data", tmp_data);
 
     // If there is no trailing slash on the log dir, add one.
     const char *filepath = RSTRING_PTR(logdir);
@@ -435,165 +586,10 @@ static VALUE statsrb_rack_call(VALUE self, VALUE env) {
   return response;
 }
 
-/**
- * Keeps track of a single event.
- */
-typedef struct {
-  char *namespace[256];
-  int timestamp;
-  int value;
-} StatsrbEvent;
-
-/**
- * Pushes a data event onto the internal storage.
- *
- * @param VALUE self
- * @param const char *namespace
- * @param int timestamp
- * @param int value
- */
-static void statsrb_data_push_event(VALUE self, const char *namespace, int timestamp, int value) {
-  StatsrbEvent *internal = rb_iv_get(self, "@internal");
-  // For some weird reason, we can't rely on rb_iv_get to keep track of the value,
-  // so we'll just make new pointers for each increment. Stupid, yes.
-  int count = NUM2INT(rb_iv_get(self, "@count"));
-  int memory = NUM2INT(rb_iv_get(self, "@memory"));
-
-  // If it appears that we are approaching the end of the memory block, allocate
-  // some more.
-  // @TODO 2x memory is a little nuts, maybe throttle this back a bit?
-  if ((sizeof(StatsrbEvent) * count) > (memory * .9)) {
-    memory = (2* count) * sizeof(StatsrbEvent);
-    StatsrbEvent *success = (StatsrbEvent *)realloc(internal, memory);
-    if (success) {
-      internal = success;
-      success = NULL;
-      // Make sure to track our usage.
-      // @TODO this surely isn't ideal, but not sure how get sizeof(*)
-      rb_iv_set(self, "@internal", internal);
-      rb_iv_set(self, "@memory", INT2NUM(memory));
-    }
-    else {
-      fprintf(stderr, "Error allocating memory");
-      return;
-    }
-  }
-
-  // Set the values;
-  internal[count].timestamp = timestamp;
-  strcpy(internal[count].namespace, namespace);
-  internal[count].value = value;
-
-  // Track the count by saving the new pointer.
-  count++;
-  rb_iv_set(self, "@count", INT2NUM(count));
-}
-
-/**
- * Creates a ruby hash from event VALUEs.
- *
- * @param VALUE self
- * @param VALUE ts
- * @param VALUE ns
- * @param VALUE v
- */
-VALUE statsrb_create_rb_event_hash(VALUE self, VALUE ts, VALUE ns, VALUE v) {
-  // @data hash key symbols.
-  VALUE statsrb_key_ts = rb_iv_get(self, "@key_ts");
-  VALUE statsrb_key_ns = rb_iv_get(self, "@key_ns");
-  VALUE statsrb_key_v = rb_iv_get(self, "@key_v");
-
-  VALUE statsrb_event = rb_hash_new();
-  rb_hash_aset(statsrb_event, statsrb_key_ts, ts);
-  rb_hash_aset(statsrb_event, statsrb_key_ns, ns);
-  rb_hash_aset(statsrb_event, statsrb_key_v, v);
-
-  return statsrb_event;
-}
-
-/**
- * Pushes a stat onto the statsrb object.
- * @param timestamp [Number]
- * @param namespace [String]
- * @param value [Number]
- * @return [Statsrb] A reference to the object.
- */
-static VALUE statsrb_push(VALUE self, VALUE timestamp, VALUE namespace, VALUE value) {
-  int ts = NUM2INT(timestamp);
-  int v = NUM2INT(value);
-  const char *ns = RSTRING_PTR(namespace);
-  statsrb_data_push_event(self, ns, ts, v);
-  return self;
-}
-
-/**
- * Retrieves internal data based on specified filters.
- * @param namespace [String]
- * @param limit [Number]
- * @param start_time [Number]
- * @param end_time [Number]
- * @return [Array] An array of data hashes.
- */
-static VALUE statsrb_get(VALUE self, VALUE query_ns, VALUE query_limit, VALUE query_start, VALUE query_end) {
-  StatsrbEvent *internal = rb_iv_get(self, "@internal");
-  int count = NUM2INT(rb_iv_get(self, "@count"));
-  char *tmp_ns[256];
-
-  VALUE filtered_data = rb_ary_new();
-  VALUE statsrb_event;
-
-  int i = 0;
-  int filtered_count = 0;
-
-  int limit = NUM2INT(query_limit);
-  int qstart = NUM2INT(query_start);
-  int qend = NUM2INT(query_end);
-
-  for (i = 0; i < count; i++) {
-    strcpy(tmp_ns, RSTRING_PTR(query_ns));
-    if (strcmp(tmp_ns, internal[i].namespace) == 0
-        && (qstart == 0 || internal[i].timestamp >= qstart)
-        && (qend == 0 || internal[i].timestamp <= qend)) {
-
-      statsrb_event = statsrb_create_rb_event_hash(
-        self,
-        INT2NUM(internal[i].timestamp),
-        rb_str_new2(internal[i].namespace),
-        INT2NUM(internal[i].value)
-      );
-
-      rb_ary_push(filtered_data, statsrb_event);
-
-      filtered_count++;
-    }
-
-    if (limit > 0 && filtered_count == limit) {
-      break;
-    }
-  }
-
-  return filtered_data;
-}
-
-/**
- * Debugging function.
- */
-static void statsrb_debug_print_internal(VALUE self) {
-  StatsrbEvent *internal = rb_iv_get(self, "@internal");
-  int count = NUM2INT(rb_iv_get(self, "@count"));
-  int i;
-  int memory = NUM2INT(rb_iv_get(self, "@memory"));
-  
-  //for (i = 0; i < count; i++) {
-    //fprintf(stdout, "Debug: ns: %s; ts: %d; v: %d\n", internal[i].namespace, internal[i].timestamp, internal[i].value);
-  //}
-  fprintf(stdout, "Debug: count: %d memory: %d\n", count, memory);
-}
-
-static void statsrb_load_test(VALUE self, VALUE amt) {
+static void statsrb_load_test(VALUE self, VALUE ns, VALUE amt) {
   int i;
   for (i = 0; i < NUM2INT(amt); i++) {
-    statsrb_data_push_event(self, "kevin", i + 100, i);
+    statsrb_data_push_event(self, RSTRING_PTR(ns), i + 100, i);
   }
   statsrb_debug_print_internal(self);
   int ctest = NUM2INT(rb_iv_get(self, "@count"));
@@ -638,7 +634,7 @@ void Init_statsrb(void) {
   rb_define_method(klass, "query", statsrb_read, 5);
   rb_define_method(klass, "read", statsrb_read, 5);
   rb_define_method(klass, "get", statsrb_get, 4);
-  rb_define_method(klass, "load_test", statsrb_load_test, 1);
+  rb_define_method(klass, "load_test", statsrb_load_test, 2);
   rb_define_method(klass, "sort", statsrb_sort, 0);
   rb_define_method(klass, "write", statsrb_write, 2);
   rb_define_method(klass, "split_write", statsrb_split_write, 2);
