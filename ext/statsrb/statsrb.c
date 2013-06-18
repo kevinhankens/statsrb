@@ -13,94 +13,6 @@ typedef struct {
 } StatsrbEvent;
 
 /**
- * Locates data from a specified file and loads into @data.
- * @param filepath [String]
- * @param namespace [String]
- * @param limit [Number]
- * @param start_time [Number]
- * @param end_time [Number]
- * @return [Statsrb] A reference to the object.
- */
-static VALUE statsrb_read(VALUE self, VALUE logfile, VALUE query_ns, VALUE query_limit, VALUE query_start, VALUE query_end) {
-  FILE * file;
-  int line_size = 256;
-  char *line = (char *) malloc(line_size);
-  const char *filepath = RSTRING_PTR(logfile);
-  const char *query_ns_char = RSTRING_PTR(query_ns);
-
-  // @data hash key symbols.
-  VALUE statsrb_key_ts = rb_iv_get(self, "@key_ts");
-  VALUE statsrb_key_ns = rb_iv_get(self, "@key_ns");
-  VALUE statsrb_key_v = rb_iv_get(self, "@key_v");
-  // Create an empty string for comparison.
-  VALUE statsrb_str_empty = rb_str_new2("");
-
-  // Convert into an int that ruby understands.
-  int limit = NUM2INT(query_limit);
-  int qstart = NUM2INT(query_start);
-  int qend = NUM2INT(query_end);
-
-  // Return array instantiation.
-  VALUE statsrb_data = rb_iv_get(self, "@data");
-  // @TODO does this garbage collect all of the old hash data?
-  rb_ary_resize(statsrb_data, 0);
-
-  file = fopen(filepath, "r");
-  if (file == NULL) {
-    fprintf(stderr, "File error: could not open file %s for reading.", filepath);
-    return self;
-  }
-
-  int count = 0;
-
-  while (NULL != fgets(line, line_size, file) && count < limit) {
-    // strstr doesn't work with newline chars.
-    size_t len = strlen(line) - 1;
-    if (line[len] == '\n');
-        line[len] = '\0';
-
-    // If the namespace is in the row, explode it.
-    if (line[0] != '\0' && line[0] != '\n' && strchr(line, query_ns_char[0]) && strstr(line, query_ns_char)) {
-      VALUE statsrb_event = rb_hash_new();
-
-      // I tried sscanf for convenience, but it was predictably slower.
-      //int statsrb_ts, statsrb_v;
-      //sscanf(line, "%d\t%*s\t%d", &statsrb_ts, &statsrb_v);
-
-      // @TODO this should something more robust than atoi.
-      int statsrb_ts = atoi(strtok(line, "\t"));
-
-      if (statsrb_ts != NULL && (qstart == 0 || statsrb_ts >= qstart) && (qend == 0 || statsrb_ts <= qend)) {
-        // @TODO this should probably use the actual namespace if we do wildcard queries.
-        VALUE statsrb_str_ns = rb_str_new2(strtok(NULL, "\t"));
-        //strtok(NULL, "\t");
-        int statsrb_v = atoi(strtok(NULL, "\0"));
-
-        // @TODO this should really query the namespace exactly instead of just relying on strstr.
-        //if (rb_str_cmp(query_ns, statsrb_str_empty) == 0 || rb_str_cmp(query_ns, statsrb_str_ns) == 0) {
-        if (statsrb_ts && (statsrb_v || statsrb_v == 0)) {
-          rb_hash_aset(statsrb_event, statsrb_key_ts, INT2NUM(statsrb_ts));
-          rb_hash_aset(statsrb_event, statsrb_key_ns, statsrb_str_ns);
-          //rb_hash_aset(statsrb_event, statsrb_key_ns, query_ns);
-          rb_hash_aset(statsrb_event, statsrb_key_v, INT2NUM(statsrb_v));
-          rb_ary_push(statsrb_data, statsrb_event);
-          count++;
-        }
-      }
-    }
-  }
-
-  // terminate
-  fclose (file);
-  free (line);
-
-  //return statsrb_data;
-  //rb_iv_set(self, "@data", statsrb_data);
-
-  return self;
-}
-
-/**
  * Implementation of quicksort algorithm.
  */
 void time_sort(int left, int right, VALUE ary, VALUE statsrb_key_ts) {
@@ -293,6 +205,82 @@ static void statsrb_debug_print_internal(VALUE self) {
   //}
   fprintf(stdout, "Debug: count: %d memory: %d\n", count, memory);
 }
+
+/**
+ * Locates data from a specified file and loads into @data.
+ * @param filepath [String]
+ * @param namespace [String]
+ * @param limit [Number]
+ * @param start_time [Number]
+ * @param end_time [Number]
+ * @return [Statsrb] A reference to the object.
+ */
+static VALUE statsrb_read(VALUE self, VALUE logfile, VALUE query_ns, VALUE query_limit, VALUE query_start, VALUE query_end) {
+  FILE * file;
+  int line_size = 256;
+  char *line = (char *) malloc(line_size);
+  char *tmp_ns = (char *) malloc(line_size);
+  const char *filepath = RSTRING_PTR(logfile);
+  const char *query_ns_char = RSTRING_PTR(query_ns);
+  int tmp_v, tmp_ts;
+
+  // Convert into an int that ruby understands.
+  int limit = NUM2INT(query_limit);
+  int qstart = NUM2INT(query_start);
+  int qend = NUM2INT(query_end);
+
+  file = fopen(filepath, "r");
+  if (file == NULL) {
+    fprintf(stderr, "File error: could not open file %s for reading.", filepath);
+    return self;
+  }
+
+  int count = 0;
+
+  while (NULL != fgets(line, line_size, file) && count < limit) {
+    // strstr doesn't work with newline chars.
+    size_t len = strlen(line) - 1;
+    if (line[len] == '\n');
+        line[len] = '\0';
+
+    // If the namespace is in the row, explode it.
+    if (line[0] != '\0' && line[0] != '\n' && strchr(line, query_ns_char[0]) && strstr(line, query_ns_char)) {
+      //VALUE statsrb_event = rb_hash_new();
+
+      // I tried sscanf for convenience, but it was predictably slower.
+      //int statsrb_ts, statsrb_v;
+      //sscanf(line, "%d\t%*s\t%d", &statsrb_ts, &statsrb_v);
+
+      // @TODO this should something more robust than atoi.
+      tmp_ts = atoi(strtok(line, "\t"));
+
+      if (tmp_ts != NULL && (qstart == 0 || tmp_ts >= qstart) && (qend == 0 || tmp_ts <= qend)) {
+        // @TODO this should probably use the actual namespace if we do wildcard queries.
+        strcpy(tmp_ns, strtok(NULL, "\t"));
+        //strtok(NULL, "\t");
+        tmp_v = atoi(strtok(NULL, "\0"));
+
+        // @TODO this should really query the namespace exactly instead of just relying on strstr.
+        //if (rb_str_cmp(query_ns, statsrb_str_empty) == 0 || rb_str_cmp(query_ns, statsrb_str_ns) == 0) {
+        if (tmp_ts && (tmp_v || tmp_v == 0)) {
+          statsrb_data_push_event(self, 
+            tmp_ns, 
+            tmp_ts, 
+            tmp_v);
+          count++;
+        }
+      }
+    }
+  }
+
+  // terminate
+  fclose (file);
+  free (line);
+  free (tmp_ns);
+
+  return self;
+}
+
 
 /**
  * Writes the @data in memory to a specified file.
@@ -586,6 +574,9 @@ static VALUE statsrb_rack_call(VALUE self, VALUE env) {
   return response;
 }
 
+/**
+ * Populates the internal storage with test data.
+ */
 static void statsrb_load_test(VALUE self, VALUE ns, VALUE amt) {
   int i;
   for (i = 0; i < NUM2INT(amt); i++) {
@@ -594,6 +585,13 @@ static void statsrb_load_test(VALUE self, VALUE ns, VALUE amt) {
   statsrb_debug_print_internal(self);
   int ctest = NUM2INT(rb_iv_get(self, "@count"));
   fprintf(stdout, "Debug: count: %d\n", ctest);
+}
+
+/**
+ * Returns the length of the internal storage.
+ */
+static void statsrb_length(VALUE self) {
+  return rb_iv_get(self, "@count");
 }
 
 /**
@@ -635,6 +633,7 @@ void Init_statsrb(void) {
   rb_define_method(klass, "read", statsrb_read, 5);
   rb_define_method(klass, "get", statsrb_get, 4);
   rb_define_method(klass, "load_test", statsrb_load_test, 2);
+  rb_define_method(klass, "length", statsrb_length, 0);
   rb_define_method(klass, "sort", statsrb_sort, 0);
   rb_define_method(klass, "write", statsrb_write, 2);
   rb_define_method(klass, "split_write", statsrb_split_write, 2);
