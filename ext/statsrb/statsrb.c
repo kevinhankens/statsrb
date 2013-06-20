@@ -28,34 +28,36 @@ static VALUE statsrb_length(VALUE self) {
 /**
  * Implementation of quicksort algorithm.
  */
-void time_sort(int left, int right, VALUE ary, VALUE statsrb_key_ts) {
+void time_sort(int left, int right, StatsrbEvent * internal) {
   int i = left;
   int j = right;
   int p = (i + j) / 2;
-  int pv = NUM2INT(rb_hash_aref(rb_ary_entry(ary, p), statsrb_key_ts));
-  VALUE tmp;
+  int pv = internal[p].timestamp;
+  StatsrbEvent * tmp = (StatsrbEvent *)malloc(sizeof(StatsrbEvent));
 
   while (i <= j) {
-    while (NUM2INT(rb_hash_aref(rb_ary_entry(ary, i), statsrb_key_ts)) < pv) {
+    while (internal[i].timestamp < pv) {
       i++;
     }
-    while (NUM2INT(rb_hash_aref(rb_ary_entry(ary, j), statsrb_key_ts)) > pv) {
+    while (internal[j].timestamp > pv) {
       j--;
     }
     if (i <= j) {
-      tmp = rb_ary_entry(ary, i);
-      rb_ary_store(ary, i, rb_ary_entry(ary, j));
-      rb_ary_store(ary, j, tmp);
+      memcpy(tmp, &internal[i], sizeof(StatsrbEvent));
+      memcpy(&internal[i], &internal[j], sizeof(StatsrbEvent));
+      memcpy(&internal[j], tmp, sizeof(StatsrbEvent));
       i++;
       j--;
     }
   }
 
+  free(tmp);
+
   if (left < j) {
-    time_sort(left, j, ary, statsrb_key_ts);
+    time_sort(left, j, internal);
   }
   if (i < right) {
-    time_sort(i, right, ary, statsrb_key_ts);
+    time_sort(i, right, internal);
   }
 }
 
@@ -64,13 +66,13 @@ void time_sort(int left, int right, VALUE ary, VALUE statsrb_key_ts) {
  * @return [Hash] The sorted data
  */
 static VALUE statsrb_sort(VALUE self) {
-  VALUE statsrb_data = rb_iv_get(self, "@data");
-  int len = RARRAY_LEN(statsrb_data);
+  StatsrbEvent *internal = rb_iv_get(self, "@internal");
+  int len = NUM2INT(statsrb_length(self));
   if (len > 0) {
-    VALUE statsrb_key_ts = rb_iv_get(self, "@key_ts");
-    time_sort(0, len - 1, statsrb_data, statsrb_key_ts);
+    time_sort(0, len - 1, internal);
   }
-  return statsrb_data;
+// @TODO what to return??
+  return self;
 }
 
 /**
@@ -496,8 +498,7 @@ static VALUE statsrb_rack_call(VALUE self, VALUE env) {
       rb_ary_push(body, rb_obj_as_string(INT2NUM(data_length)));
 
       if (data_length > NUM2INT(rb_iv_get(self, "@flush_count"))) {
-// @TODO uncomment when sort is fixed!
-        //statsrb_sort(self);
+        statsrb_sort(self);
         statsrb_split_write(self, rb_iv_get(self, "@split_file_dir"), rb_str_new2("a+"));
         statsrb_data_clear_events(self);
       }
@@ -559,8 +560,7 @@ static VALUE statsrb_rack_call(VALUE self, VALUE env) {
       VALUE tmp = rb_class_new_instance(0, NULL, klass);
 
       statsrb_read(tmp, rb_str_plus(rb_iv_get(self, "@split_file_dir"), statsrb_ns), statsrb_ns, INT2NUM(query_limit), INT2NUM(query_start), INT2NUM(query_end));
-// @TODO uncomment when sort is fixed!
-      //statsrb_sort(tmp);
+      statsrb_sort(tmp);
 
       int i, data_length = NUM2INT(statsrb_length(tmp));
       StatsrbEvent *internal = rb_iv_get(tmp, "@internal");
@@ -603,9 +603,10 @@ static VALUE statsrb_rack_call(VALUE self, VALUE env) {
  * Populates the internal storage with test data.
  */
 static void statsrb_load_test(VALUE self, VALUE ns, VALUE amt) {
-  int i;
+  int i, val;
   for (i = 0; i < NUM2INT(amt); i++) {
-    statsrb_data_push_event(self, RSTRING_PTR(ns), i + 100, i);
+    val = rand() % 100;
+    statsrb_data_push_event(self, RSTRING_PTR(ns), val + 100, val);
   }
   statsrb_debug_print_internal(self);
   int ctest = NUM2INT(rb_iv_get(self, "@count"));
