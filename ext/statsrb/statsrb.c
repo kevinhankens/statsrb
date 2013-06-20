@@ -605,9 +605,10 @@ static VALUE statsrb_rack_call(VALUE self, VALUE env) {
  */
 static void statsrb_load_test(VALUE self, VALUE ns, VALUE amt) {
   int i, val;
+  srand(time(NULL));
   for (i = 0; i < NUM2INT(amt); i++) {
-    val = rand() % 100;
-    statsrb_data_push_event(self, RSTRING_PTR(ns), val + 100, val);
+    val = rand();
+    statsrb_data_push_event(self, RSTRING_PTR(ns), val + 100, val + 1);
   }
   statsrb_debug_print_internal(self);
   int ctest = NUM2INT(rb_iv_get(self, "@count"));
