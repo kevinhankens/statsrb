@@ -24,6 +24,15 @@ t = Statsrb.new
 t.read "/tmp/kevin", "blah", 10, 0, 0
 pp t.get "blah", 10, 0, 120
 
+env = {
+  "PATH_INFO" => "/PUT",
+  "QUERY_STRING" => "name=kevin&value=13"
+}
+
+11.times do |i|
+  pp t.call(env);
+end
+
 # s.load_test 100000
 # a = s.get "kevin", 100, 0, 0
 # puts a.length

@@ -13,6 +13,19 @@ typedef struct {
 } StatsrbEvent;
 
 /**
+ * Returns the length of the internal storage.
+ */
+static VALUE statsrb_length(VALUE self) {
+  VALUE count = rb_iv_get(self, "@count");
+  if (rb_equal(count, Qfalse)) {
+    count = INT2NUM(0);
+    rb_iv_set(self, "@count", count);
+  }
+
+  return count;
+}
+
+/**
  * Implementation of quicksort algorithm.
  */
 void time_sort(int left, int right, VALUE ary, VALUE statsrb_key_ts) {
@@ -58,6 +71,23 @@ static VALUE statsrb_sort(VALUE self) {
     time_sort(0, len - 1, statsrb_data, statsrb_key_ts);
   }
   return statsrb_data;
+}
+
+/**
+ * Clears out the internal memory.
+ *
+ * @param VALUE self
+ */
+static void statsrb_data_clear_events(self) {
+  StatsrbEvent *internal = rb_iv_get(self, "@internal");
+
+  // @TODO test this for memory leaks.
+  free(internal);
+
+  StatsrbEvent *newinternal = (StatsrbEvent *)calloc(1, sizeof(StatsrbEvent));
+  rb_iv_set(self, "@internal", newinternal);
+  rb_iv_set(self, "@memory", INT2NUM(sizeof(StatsrbEvent)));
+  rb_iv_set(self, "@count", INT2NUM(0));
 }
 
 /**
@@ -415,13 +445,6 @@ static VALUE statsrb_rack_call(VALUE self, VALUE env) {
   VALUE response = rb_ary_new();
   VALUE headers = rb_hash_new();
   VALUE body = rb_ary_new();
-  VALUE statsrb_data = rb_iv_get(self, "@data");
-  VALUE statsrb_hash = rb_hash_new();
-
-  // @data hash key symbols.
-  VALUE statsrb_key_ts = rb_iv_get(self, "@key_ts");
-  VALUE statsrb_key_ns = rb_iv_get(self, "@key_ns");
-  VALUE statsrb_key_v = rb_iv_get(self, "@key_v");
 
   char *path = RSTRING_PTR(rb_hash_aref(env, rb_str_new2("PATH_INFO")));
 
@@ -466,18 +489,17 @@ static VALUE statsrb_rack_call(VALUE self, VALUE env) {
         statsrb_v = atoi(RSTRING_PTR(statsrb_v_qs));
       }
 
-      rb_hash_aset(statsrb_hash, statsrb_key_ts, INT2NUM(statsrb_ts));
-      rb_hash_aset(statsrb_hash, statsrb_key_ns, statsrb_ns);
-      rb_hash_aset(statsrb_hash, statsrb_key_v, INT2NUM(statsrb_v));
-      rb_ary_push(statsrb_data, statsrb_hash);
+      statsrb_data_push_event(self, RSTRING_PTR(statsrb_ns), statsrb_ts, statsrb_v);
 
-      int data_length = RARRAY_LEN(statsrb_data);
-      rb_ary_push(body, rb_obj_as_string(INT2NUM(RARRAY_LEN(statsrb_data))));
+      int data_length = NUM2INT(statsrb_length(self));
+
+      rb_ary_push(body, rb_obj_as_string(INT2NUM(data_length)));
 
       if (data_length > NUM2INT(rb_iv_get(self, "@flush_count"))) {
-        statsrb_sort(self);
+// @TODO uncomment when sort is fixed!
+        //statsrb_sort(self);
         statsrb_split_write(self, rb_iv_get(self, "@split_file_dir"), rb_str_new2("a+"));
-        rb_ary_resize(statsrb_data, 0);
+        statsrb_data_clear_events(self);
       }
 
       rb_ary_push(body, statsrb_ns);
@@ -533,27 +555,30 @@ static VALUE statsrb_rack_call(VALUE self, VALUE env) {
       }
 
       // Create a new Statsrb object to query from.
-      // @todo we probably need to assign a new array to @data to avoid messing up the pointers.
-      VALUE tmp = rb_obj_dup(self);
-      VALUE tmp_data = rb_ary_new();
-      rb_iv_set(tmp, "@data", tmp_data);
-      statsrb_read(tmp, rb_str_plus(rb_iv_get(self, "@split_file_dir"), statsrb_ns), statsrb_ns, INT2NUM(query_limit), INT2NUM(query_start), INT2NUM(query_end));
-      statsrb_sort(tmp);
+      VALUE klass = rb_obj_class(self);
+      VALUE tmp = rb_class_new_instance(0, NULL, klass);
 
-      int i, data_length = RARRAY_LEN(tmp_data);
+      statsrb_read(tmp, rb_str_plus(rb_iv_get(self, "@split_file_dir"), statsrb_ns), statsrb_ns, INT2NUM(query_limit), INT2NUM(query_start), INT2NUM(query_end));
+// @TODO uncomment when sort is fixed!
+      //statsrb_sort(tmp);
+
+      int i, data_length = NUM2INT(statsrb_length(tmp));
+      StatsrbEvent *internal = rb_iv_get(tmp, "@internal");
 
       for (i = 0; i < data_length; i++) {
         rb_ary_push(body, rb_str_new("[", 1));
-        rb_ary_push(body, rb_obj_as_string(rb_hash_aref(rb_ary_entry(tmp_data, i), statsrb_key_ts )));
+        rb_ary_push(body, rb_obj_as_string(INT2NUM(internal[i].timestamp)));
         rb_ary_push(body, rb_str_new(",", 1));
-        rb_ary_push(body, rb_obj_as_string(rb_hash_aref(rb_ary_entry(tmp_data, i), statsrb_key_v )));
+        rb_ary_push(body, rb_str_new2(internal[i].namespace));
         rb_ary_push(body, rb_str_new("]", 1));
+        rb_ary_push(body, rb_obj_as_string(INT2NUM(internal[i].value)));
+
         if (i < data_length - 1) {
           rb_ary_push(body, rb_str_new(",", 1));
         }
         rb_ary_push(body, rb_str_new("\n", 1));
       }
-      rb_ary_resize(tmp_data, 0);
+      statsrb_data_clear_events(tmp);
     }
     rb_ary_push(body, rb_str_new("]}", 2));
     if (jsoncallback != Qnil) {
@@ -585,13 +610,6 @@ static void statsrb_load_test(VALUE self, VALUE ns, VALUE amt) {
   statsrb_debug_print_internal(self);
   int ctest = NUM2INT(rb_iv_get(self, "@count"));
   fprintf(stdout, "Debug: count: %d\n", ctest);
-}
-
-/**
- * Returns the length of the internal storage.
- */
-static void statsrb_length(VALUE self) {
-  return rb_iv_get(self, "@count");
 }
 
 /**
@@ -638,6 +656,7 @@ void Init_statsrb(void) {
   rb_define_method(klass, "write", statsrb_write, 2);
   rb_define_method(klass, "split_write", statsrb_split_write, 2);
   rb_define_method(klass, "push", statsrb_push, 3);
+  rb_define_method(klass, "clear", statsrb_data_clear_events, 0);
   rb_define_method(klass, "call", statsrb_rack_call, 1);
   // Define :attr_accessor (read/write instance var)
   // Note that this must correspond with a call to rb_iv_self() and it's string name must be @data.
