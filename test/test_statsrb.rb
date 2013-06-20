@@ -1,5 +1,7 @@
 require 'minitest/autorun'
 require 'statsrb'
+require 'json'
+require 'pp'
 
 class TestStatsrb < MiniTest::Test
 
@@ -8,10 +10,16 @@ class TestStatsrb < MiniTest::Test
   def setup
     @s = Statsrb.new
     @tmpfile = "/tmp/test.statsrb"
+    @s.split_file_dir = "/tmp/"
+    @s.flush_count = 5
   end
 
   def teardown
     File.delete @tmpfile unless !File.exists? @tmpfile
+    rackfile = @tmpfile + "test1"
+    File.delete rackfile unless !File.exists? rackfile
+    rackfile = @tmpfile + "test2"
+    File.delete rackfile unless !File.exists? rackfile
   end
 
   # Provides test data.
@@ -38,9 +46,9 @@ class TestStatsrb < MiniTest::Test
   # Tests that the data was indeed pushed.
   def test_push_data
     push_data
-    assert_equal @s.data.length, get_data.length
+    assert_equal @s.length, get_data.length
   end
-  
+
   # Tests that we can filter the in-memory data.
   def test_get_data
     push_data
@@ -77,13 +85,48 @@ class TestStatsrb < MiniTest::Test
     end
   end
 
+  # Tests that we can clear data from memory.
+  def test_clear_data
+    push_data
+    assert_equal @s.length, get_data.length
+    @s.clear
+    assert_equal @s.length, 0
+  end
+
   # Tests that we can read data from a file.
   def test_read_data
     push_data
     write_data
+    @s.clear
     @s.read @tmpfile, "test1", 100, 0, 0
-    assert_equal @s.data.length, 3
+    assert_equal @s.length, 3
+    @s.clear
     @s.read @tmpfile, "test2", 100, 0, 0
-    assert_equal @s.data.length, 2
+    assert_equal @s.length, 2
+  end
+
+  # Tests that the rack interface works properly.
+  def test_rack_call
+    # Test putting data.
+    env = {
+      "PATH_INFO" => "/PUT",
+      "QUERY_STRING" => "name=test&value=13"
+    }
+
+    5.times do |i|
+      @s.call(env);
+    end
+
+    assert_equal @s.length, 5
+
+    # Test getting data.
+    env = {
+      "PATH_INFO" => "/GET/test1",
+      "QUERY_STRING" => ""
+    }
+
+    resp = @s.call(env)
+    data = JSON.parse(resp[2].join)
+    assert_equal data["test1"].length, 3
   end
 end

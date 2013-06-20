@@ -568,10 +568,11 @@ static VALUE statsrb_rack_call(VALUE self, VALUE env) {
       for (i = 0; i < data_length; i++) {
         rb_ary_push(body, rb_str_new("[", 1));
         rb_ary_push(body, rb_obj_as_string(INT2NUM(internal[i].timestamp)));
-        rb_ary_push(body, rb_str_new(",", 1));
+        rb_ary_push(body, rb_str_new(",\"", 2));
         rb_ary_push(body, rb_str_new2(internal[i].namespace));
-        rb_ary_push(body, rb_str_new("]", 1));
+        rb_ary_push(body, rb_str_new("\",", 2));
         rb_ary_push(body, rb_obj_as_string(INT2NUM(internal[i].value)));
+        rb_ary_push(body, rb_str_new("]", 1));
 
         if (i < data_length - 1) {
           rb_ary_push(body, rb_str_new(",", 1));

@@ -13,8 +13,8 @@ require 'pp'
 # s.push 67899, "melissa", 678
 
 
-s.load_test "kevin", 1000
-s.load_test "melissa", 1000
+s.load_test "kevin", 10
+s.load_test "melissa", 10
 s.sort
 pp s.get "kevin", 1000, 0, 0
 # pp s.get "kevin", 10, 0, 0
