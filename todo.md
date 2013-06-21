@@ -4,3 +4,4 @@ To Do
 - Wildcard namespacing? optional ns param?
 - Add a "get element at" method?
 - Add some interface for the old @data property?
+- Add a property for the max length of the namespaces
