@@ -32,6 +32,9 @@ typedef struct {
   int ns_memory;
 } StatsrbInternal;
 
+/**
+ * Internal: retreives the internal storage.
+ */
 static StatsrbInternal* statsrb_get_internal(VALUE self) {
   StatsrbInternal *internal;
   Data_Get_Struct(rb_iv_get(self, "@internal"), StatsrbInternal, internal);
@@ -40,16 +43,72 @@ static StatsrbInternal* statsrb_get_internal(VALUE self) {
 }
 
 /**
+ * Internal: allocates internal storage.
+ */
+static void statsrb_alloc_internal(VALUE self) {
+  // Allocate internal memory for the StatsrbEvent structs.
+  StatsrbEvent *eventlist = (StatsrbEvent *)calloc(1, sizeof(StatsrbEvent));
+
+  // Allocate memory for the list of namespaces.
+  StatsrbNS *nslist = (StatsrbNS *)calloc(1, sizeof(StatsrbNS));
+
+  // Allocate memory for the pointer storage;
+  VALUE internal;
+  StatsrbInternal *internalptr = (StatsrbInternal *)calloc(1, sizeof(StatsrbInternal));
+  internalptr->event_list = eventlist;
+  internalptr->event_count = 0;
+  internalptr->event_memory = 0;
+  internalptr->ns_list = nslist;
+  internalptr->ns_count = 0;
+  internalptr->ns_memory = 0;
+  internal = Data_Wrap_Struct(internal, 0, free, internalptr);
+  rb_iv_set(self, "@internal", internal);
+}
+
+/**
+ * Clears out the internal memory.
+ *
+ * @param VALUE self
+ */
+static void statsrb_data_clear_events(self) {
+  StatsrbInternal *internal = statsrb_get_internal(self);
+
+  // Allocate internal memory for the StatsrbEvent structs.
+  StatsrbEvent *event_success = (StatsrbEvent *)realloc(internal->event_list, sizeof(StatsrbEvent));
+
+  // Allocate memory for the list of namespaces.
+  StatsrbNS *ns_success = (StatsrbNS *)realloc(internal->ns_list, sizeof(StatsrbNS));
+
+  // Allocate memory for the pointer storage;
+  if (event_success && ns_success) {
+    StatsrbEvent *event_list = event_success;
+    event_success = NULL;
+    StatsrbNS *ns_list = ns_success;
+    ns_success = NULL;
+    internal->event_list = event_list;
+    internal->event_count = 0;
+    internal->event_memory = 0;
+    internal->ns_list = ns_list;
+    internal->ns_count = 0;
+    internal->ns_memory = 0;
+  }
+  else {
+    fprintf(stderr, "Error deallocating memory");
+    return;
+  }
+}
+
+
+/**
  * Returns the length of the internal storage.
  */
 static VALUE statsrb_length(VALUE self) {
-  VALUE count = rb_iv_get(self, "@count");
-  if (rb_equal(count, Qfalse)) {
-    count = INT2NUM(0);
-    rb_iv_set(self, "@count", count);
+  StatsrbInternal *internal = statsrb_get_internal(self);
+  if (!internal->event_count) {
+    internal->event_count = 0;
   }
 
-  return count;
+  return INT2NUM(internal->event_count);
 }
 
 /**
@@ -69,24 +128,24 @@ static void statsrb_debug_print_internal(VALUE self) {
 /**
  * Implementation of quicksort algorithm.
  */
-void time_sort(int left, int right, StatsrbEvent * internal) {
+void time_sort(int left, int right, StatsrbEvent * event_list) {
   int i = left;
   int j = right;
   int p = (i + j) / 2;
-  int pv = internal[p].timestamp;
+  int pv = event_list[p].timestamp;
   StatsrbEvent * tmp = (StatsrbEvent *)malloc(sizeof(StatsrbEvent));
 
   while (i <= j) {
-    while (internal[i].timestamp < pv) {
+    while (event_list[i].timestamp < pv) {
       i++;
     }
-    while (internal[j].timestamp > pv) {
+    while (event_list[j].timestamp > pv) {
       j--;
     }
     if (i <= j) {
-      memcpy(tmp, &internal[i], sizeof(StatsrbEvent));
-      memcpy(&internal[i], &internal[j], sizeof(StatsrbEvent));
-      memcpy(&internal[j], tmp, sizeof(StatsrbEvent));
+      memcpy(tmp, &event_list[i], sizeof(StatsrbEvent));
+      memcpy(&event_list[i], &event_list[j], sizeof(StatsrbEvent));
+      memcpy(&event_list[j], tmp, sizeof(StatsrbEvent));
       i++;
       j--;
     }
@@ -95,10 +154,10 @@ void time_sort(int left, int right, StatsrbEvent * internal) {
   free(tmp);
 
   if (left < j) {
-    time_sort(left, j, internal);
+    time_sort(left, j, event_list);
   }
   if (i < right) {
-    time_sort(i, right, internal);
+    time_sort(i, right, event_list);
   }
 }
 
@@ -107,35 +166,12 @@ void time_sort(int left, int right, StatsrbEvent * internal) {
  * @return [Hash] The sorted data
  */
 static VALUE statsrb_sort(VALUE self) {
-  StatsrbEvent *internal = rb_iv_get(self, "@internal");
-  int len = NUM2INT(statsrb_length(self));
-  if (len > 0) {
-    time_sort(0, len - 1, internal);
+  StatsrbInternal *internal = statsrb_get_internal(self);
+  if (internal->event_count > 0) {
+    time_sort(0, internal->event_count - 1, internal->event_list);
   }
 // @TODO what to return??
   return self;
-}
-
-/**
- * Clears out the internal memory.
- *
- * @param VALUE self
- */
-static void statsrb_data_clear_events(self) {
-  StatsrbEvent *internal = rb_iv_get(self, "@internal");
-  StatsrbNS *nslist = rb_iv_get(self, "@nslist");
-
-  // @TODO test this for memory leaks.
-  free(internal);
-  free(nslist);
-
-  StatsrbEvent *newinternal = (StatsrbEvent *)calloc(1, sizeof(StatsrbEvent));
-  StatsrbNS *newnslist = (StatsrbNS *)calloc(1, sizeof(StatsrbNS));
-  rb_iv_set(self, "@internal", newinternal);
-  rb_iv_set(self, "@nslist", newnslist);
-  rb_iv_set(self, "@memory", INT2NUM(sizeof(StatsrbEvent)));
-  rb_iv_set(self, "@count", INT2NUM(0));
-  rb_iv_set(self, "@nscount", INT2NUM(0));
 }
 
 /**
@@ -313,9 +349,9 @@ static void statsrb_get(VALUE self, VALUE query_ns, VALUE query_limit, VALUE que
  */
 static VALUE statsrb_read(VALUE self, VALUE logfile, VALUE query_ns, VALUE query_limit, VALUE query_start, VALUE query_end) {
   FILE * file;
-  int line_size = 256;
+  int line_size = 512;
   char *line = (char *) malloc(line_size);
-  char *tmp_ns = (char *) malloc(line_size);
+  char *tmp_ns = (char *) malloc(256);
   const char *filepath = RSTRING_PTR(logfile);
   const char *query_ns_char = RSTRING_PTR(query_ns);
   int tmp_v, tmp_ts;
@@ -389,9 +425,7 @@ static VALUE statsrb_write(VALUE self, VALUE logfile, VALUE mode) {
   const char *filepath = RSTRING_PTR(logfile);
   const char *filemode = RSTRING_PTR(mode);
 
-  StatsrbEvent *internal = rb_iv_get(self, "@internal");
-  StatsrbNS *nslist = rb_iv_get(self, "@nslist");
-  int count = NUM2INT(rb_iv_get(self, "@count"));
+  StatsrbInternal *internal = statsrb_get_internal(self);
   int i;
 
   file = fopen(filepath, filemode);
@@ -401,13 +435,13 @@ static VALUE statsrb_write(VALUE self, VALUE logfile, VALUE mode) {
   }
 
   // Iterate through the data array, writing the data as we go.
-  for (i = 0; i < count; i++) {
+  for (i = 0; i < internal->event_count; i++) {
     // @TODO make sure that these values are not empty before writing.
     fprintf(file,
             "%d\t%s\t%d\n",
-            internal[i].timestamp,
-            nslist[internal[i].nsindex].namespace,
-            internal[i].value
+            internal->event_list[i].timestamp,
+            internal->ns_list[internal->event_list[i].ns_index].namespace,
+            internal->event_list[i].value
     );
   }
 
@@ -682,29 +716,7 @@ static VALUE statsrb_constructor(VALUE self) {
   rb_iv_set(self, "@split_file_dir", statsrb_split_file_dir);
   rb_iv_set(self, "@flush_count", INT2NUM(9));
 
-  // Allocate internal memory for the StatsrbEvent structs.
-  StatsrbEvent *eventlist = (StatsrbEvent *)calloc(1, sizeof(StatsrbEvent));
-  //rb_iv_set(self, "@internal", internal);
-  //rb_iv_set(self, "@memory", INT2NUM(sizeof(StatsrbEvent)));
-  //rb_iv_set(self, "@count", INT2NUM(0));
-
-  // Allocate memory for the list of namespaces.
-  StatsrbNS *nslist = (StatsrbNS *)calloc(1, sizeof(StatsrbNS));
-  //rb_iv_set(self, "@nslist", nslist);
-  //rb_iv_set(self, "@nsmemory", INT2NUM(0));
-  //rb_iv_set(self, "@nscount", INT2NUM(0));
-
-  // Allocate memory for the pointer storage;
-  VALUE internal;
-  StatsrbInternal *internalptr = (StatsrbInternal *)calloc(1, sizeof(StatsrbInternal));
-  internalptr->event_list = eventlist;
-  internalptr->event_count = 0;
-  internalptr->event_memory = 0;
-  internalptr->ns_list = nslist;
-  internalptr->ns_count = 0;
-  internalptr->ns_memory = 0;
-  internal = Data_Wrap_Struct(internal, 0, free, internalptr);
-  rb_iv_set(self, "@internal", internal);
+  statsrb_alloc_internal(self);
 
   // Internal symbols for :ts, :ns and :v.
   VALUE statsrb_key_ts = rb_str_intern(rb_str_new2("ts"));
