@@ -8,7 +8,6 @@
  */
 typedef struct {
   int ns_index;
-  int nsindex; // deprecated: @TODO make sure to remove refs.
   int timestamp;
   int value;
 } StatsrbEvent;
@@ -221,7 +220,6 @@ static int statsrb_data_push_ns(VALUE self, const char *namespace) {
  */
 static void statsrb_data_push_event(VALUE self, const char *namespace, int timestamp, int value) {
   StatsrbInternal *internal = statsrb_get_internal(self);
-  //StatsrbEvent *internal = rb_iv_get(self, "@internal");
 
   // Get the index of the namespace pointer.
   int ns_index = statsrb_data_push_ns(self, namespace);
@@ -459,25 +457,21 @@ static VALUE statsrb_write(VALUE self, VALUE logfile, VALUE mode) {
  * @return [Statsrb] A reference to the object.
 */
 static VALUE statsrb_split_write(VALUE self, VALUE logdir, VALUE mode) {
-  StatsrbEvent *internal = rb_iv_get(self, "@internal");
-  StatsrbNS *nslist = rb_iv_get(self, "@nslist");
-  int nscount = NUM2INT(rb_iv_get(self, "@nscount"));
-  int count = NUM2INT(rb_iv_get(self, "@count"));
+  StatsrbInternal *internal = statsrb_get_internal(self);
   int i, ii, ns_len;
 
   VALUE tmp;
   VALUE filename;
   VALUE klass = rb_obj_class(self);
 
-  for (i = 0; i < nscount; i++) {
-// @TODO need to free the memory?
+  for (i = 0; i < internal->ns_count; i++) {
     tmp = rb_class_new_instance(0, NULL, klass);
-    for (ii = 0; ii < count; ii++) {
-      if (strcmp(nslist[i].namespace, nslist[internal[ii].nsindex].namespace) == 0) {
+    for (ii = 0; ii < internal->event_count; ii++) {
+      if (strcmp(internal->ns_list[i].namespace, internal->ns_list[internal->event_list[ii].ns_index].namespace) == 0) {
         statsrb_data_push_event(tmp,
-          nslist[internal[ii].nsindex].namespace,
-          internal[ii].timestamp,
-          internal[ii].value);
+          internal->ns_list[internal->event_list[ii].ns_index].namespace,
+          internal->event_list[ii].timestamp,
+          internal->event_list[ii].value);
       }
     }
 
@@ -487,8 +481,9 @@ static VALUE statsrb_split_write(VALUE self, VALUE logdir, VALUE mode) {
     if (filepath[len - 1] != '/') {
       logdir = rb_str_plus(logdir, rb_str_new2("/"));
     }
-    filename = rb_str_new2(nslist[i].namespace);
+    filename = rb_str_new2(internal->ns_list[i].namespace);
     statsrb_write(tmp, rb_str_plus(logdir, filename), mode);
+    statsrb_data_clear_events(tmp);
   }
 
   return self;
@@ -551,7 +546,7 @@ static VALUE statsrb_rack_call(VALUE self, VALUE env) {
   const char *method_getu = "GET";
   const char *method_put = "put";
   const char *method_putu = "PUT";
-  // Remove the leading /
+  // Remove the leading slash.
   path++;
   const char *method = strtok(path, "/\0");
   if (method && (strcmp(method, method_put) == 0 || strcmp(method, method_putu) == 0)) {
@@ -653,16 +648,15 @@ static VALUE statsrb_rack_call(VALUE self, VALUE env) {
       statsrb_sort(tmp);
 
       int i, data_length = NUM2INT(statsrb_length(tmp));
-      StatsrbEvent *internal = rb_iv_get(tmp, "@internal");
-      StatsrbNS *nslist = rb_iv_get(tmp, "@nslist");
+      StatsrbInternal *internal = statsrb_get_internal(tmp);
 
       for (i = 0; i < data_length; i++) {
         rb_ary_push(body, rb_str_new("[", 1));
-        rb_ary_push(body, rb_obj_as_string(INT2NUM(internal[i].timestamp)));
+        rb_ary_push(body, rb_obj_as_string(INT2NUM(internal->event_list[i].timestamp)));
         rb_ary_push(body, rb_str_new(",\"", 2));
-        rb_ary_push(body, rb_str_new2(nslist[internal[i].nsindex].namespace));
+        rb_ary_push(body, rb_str_new2(internal->ns_list[internal->event_list[i].ns_index].namespace));
         rb_ary_push(body, rb_str_new("\",", 2));
-        rb_ary_push(body, rb_obj_as_string(INT2NUM(internal[i].value)));
+        rb_ary_push(body, rb_obj_as_string(INT2NUM(internal->event_list[i].value)));
         rb_ary_push(body, rb_str_new("]", 1));
 
         if (i < data_length - 1) {
@@ -757,11 +751,4 @@ void Init_statsrb(void) {
   rb_define_attr(klass, "split_file_dir", 1, 1);
   // When used with a rack server, the max count of @data before flushing and writing to file.
   rb_define_attr(klass, "flush_count", 1, 1);
-  // Use a private property as internal storage.
-  rb_define_attr(klass, "internal", 0, 0);
-  rb_define_attr(klass, "count", 0, 0);
-  rb_define_attr(klass, "memory", 0, 0);
-  rb_define_attr(klass, "nslist", 0, 0);
-  rb_define_attr(klass, "nscount", 0, 0);
-  rb_define_attr(klass, "nsmemory", 0, 0);
 }
