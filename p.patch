@@ -1,0 +1,298 @@
+diff --git a/config.ru b/config.ru
+index 3189189..14fc043 100644
+--- a/config.ru
++++ b/config.ru
+@@ -2,7 +2,7 @@ require 'statsrb'
+ 
+ s = Statsrb.new
+ # Make sure this directory exists and is writable.
+-s.split_file_dir = "/tmp/statsr/"
++s.split_file_dir = "/tmp/statsrb/"
+ # Flush @data to file when there are more than 9 values.
+ s.flush_count = 9
+ run s
+diff --git a/examples/test.rb b/examples/test.rb
+index 0a1bb26..1f3243e 100644
+--- a/examples/test.rb
++++ b/examples/test.rb
+@@ -5,7 +5,7 @@ require 'json'
+ require 'pp'
+ 
+ # basic test
+- s = Statsrb.new
++s = Statsrb.new
+ #s.push 34567, "kevin", 345
+ #s.push 12345, "kevin", 123
+ #s.push 23456, "kevin", 234
+@@ -15,12 +15,19 @@ require 'pp'
+ 
+ 
+ # test load and sort
+-#s.load_test "kevin", 100000
++s.load_test "kevin", 10
+ #s.load_test "melissa", 100000
+ #s.load_test "benjamin", 100000
+-#s.sort
+-#pp s.get "kevin", 100, 0, 0
+-# pp s.get "kevin", 10, 0, 0
++s.sort
++a = s.get "kevin", 100, 0, 0
++b = s.get "kevin", 1000, 0, 0
++c = s.get "kevin", 1000, 0, 0
++d = s.get "kevin", 1000, 0, 0
++e = s.get "kevin", 1000, 0, 0
++f = s.get "kevin", 1000, 0, 0
++g = s.get "kevin", 1000, 0, 0
++h = s.get "kevin", 1000, 0, 0
++pp s.get "kevin", 10, 0, 0
+ # s.write "/tmp/kevin.txt", "w+"
+ # s.split_write "/tmp/", "w+"
+ 
+diff --git a/ext/statsrb/statsrb.c b/ext/statsrb/statsrb.c
+index 940e0ea..682bd4d 100644
+--- a/ext/statsrb/statsrb.c
++++ b/ext/statsrb/statsrb.c
+@@ -7,11 +7,15 @@
+  * Keeps track of a single event.
+  */
+ typedef struct {
+-  char *namespace[256];
++  int nsindex;
+   int timestamp;
+   int value;
+ } StatsrbEvent;
+ 
++typedef struct {
++  const char *namespace[256];
++} StatsrbNS;
++
+ /**
+  * Returns the length of the internal storage.
+  */
+@@ -82,14 +86,19 @@ static VALUE statsrb_sort(VALUE self) {
+  */
+ static void statsrb_data_clear_events(self) {
+   StatsrbEvent *internal = rb_iv_get(self, "@internal");
++  StatsrbNS *nslist = rb_iv_get(self, "@nslist");
+ 
+   // @TODO test this for memory leaks.
+   free(internal);
++  free(nslist);
+ 
+   StatsrbEvent *newinternal = (StatsrbEvent *)calloc(1, sizeof(StatsrbEvent));
++  StatsrbNS *newnslist = (StatsrbNS *)calloc(1, sizeof(StatsrbNS));
+   rb_iv_set(self, "@internal", newinternal);
++  rb_iv_set(self, "@nslist", newnslist);
+   rb_iv_set(self, "@memory", INT2NUM(sizeof(StatsrbEvent)));
+   rb_iv_set(self, "@count", INT2NUM(0));
++  rb_iv_set(self, "@nscount", INT2NUM(0));
+ }
+ 
+ /**
+@@ -103,22 +112,28 @@ static void statsrb_data_clear_events(self) {
+  *   The pointer index of the namespace in @nslist.
+  */
+ static int statsrb_data_push_ns(VALUE self, const char *namespace) {
+-  int i, nscount = NUM2INT(rb_iv_get(self, "@nscount"));
+-  char **nslist = rb_iv_get(self, "@nslist");
++  int i;
++  int nscount = NUM2INT(rb_iv_get(self, "@nscount"));
++  int memory = NUM2INT(rb_iv_get(self, "@nsmemory"));
++  StatsrbNS *nslist = rb_iv_get(self, "@nslist");
+ 
+   for (i = 0; i < nscount; i++) {
+-    if (strcmp(nslist[i], namespace) == 0) {
++    if (strcmp(nslist[i].namespace, namespace) == 0) {
+       return i;
+     }
+   }
+ 
+-  nslist[nscount] = malloc(256);
++  memory = (nscount + 1) * sizeof(StatsrbNS);
++  StatsrbNS *success = (StatsrbNS *)realloc(nslist, memory);
+ 
+-  if (nslist[nscount]) {
+-    strcpy(nslist[nscount], namespace);
++  if (success) {
++    nslist = success;
++    success = NULL;
++    strcpy(nslist[nscount].namespace, namespace);
+     nscount++;
+     rb_iv_set(self, "@nscount", INT2NUM(nscount));
+-    return nscount;
++    rb_iv_set(self, "@nsmemory", INT2NUM(memory));
++    return nscount - 1;
+   }
+   else {
+     fprintf(stderr, "Error allocating memory");
+@@ -167,7 +182,7 @@ static void statsrb_data_push_event(VALUE self, const char *namespace, int times
+ 
+   // Set the values;
+   internal[count].timestamp = timestamp;
+-  strcpy(internal[count].namespace, namespace);
++  internal[count].nsindex = nsindex;
+   internal[count].value = value;
+ 
+   // Track the count by saving the new pointer.
+@@ -222,8 +237,8 @@ static VALUE statsrb_push(VALUE self, VALUE timestamp, VALUE namespace, VALUE va
+  */
+ static VALUE statsrb_get(VALUE self, VALUE query_ns, VALUE query_limit, VALUE query_start, VALUE query_end) {
+   StatsrbEvent *internal = rb_iv_get(self, "@internal");
++  StatsrbNS *nslist = rb_iv_get(self, "@nslist");
+   int count = NUM2INT(rb_iv_get(self, "@count"));
+-  char *tmp_ns[256];
+ 
+   VALUE filtered_data = rb_ary_new();
+   VALUE statsrb_event;
+@@ -235,16 +250,16 @@ static VALUE statsrb_get(VALUE self, VALUE query_ns, VALUE query_limit, VALUE qu
+   int qstart = NUM2INT(query_start);
+   int qend = NUM2INT(query_end);
+ 
++// @TODO PLEASE FIGURE OUT WHY THIS IS SEGFAULTING :(
+   for (i = 0; i < count; i++) {
+-    strcpy(tmp_ns, RSTRING_PTR(query_ns));
+-    if (strcmp(tmp_ns, internal[i].namespace) == 0
++    if (strcmp(RSTRING_PTR(query_ns), nslist[internal[i].nsindex].namespace) == 0
+         && (qstart == 0 || internal[i].timestamp >= qstart)
+         && (qend == 0 || internal[i].timestamp <= qend)) {
+ 
+       statsrb_event = statsrb_create_rb_event_hash(
+         self,
+         INT2NUM(internal[i].timestamp),
+-        rb_str_new2(internal[i].namespace),
++        rb_str_new2(nslist[internal[i].nsindex].namespace),
+         INT2NUM(internal[i].value)
+       );
+ 
+@@ -266,12 +281,13 @@ static VALUE statsrb_get(VALUE self, VALUE query_ns, VALUE query_limit, VALUE qu
+  */
+ static void statsrb_debug_print_internal(VALUE self) {
+   StatsrbEvent *internal = rb_iv_get(self, "@internal");
++  StatsrbNS *nslist = rb_iv_get(self, "@nslist");
+   int count = NUM2INT(rb_iv_get(self, "@count"));
+   int i;
+   int memory = NUM2INT(rb_iv_get(self, "@memory"));
+ 
+   //for (i = 0; i < count; i++) {
+-    //fprintf(stdout, "Debug: ns: %s; ts: %d; v: %d\n", internal[i].namespace, internal[i].timestamp, internal[i].value);
++    //fprintf(stdout, "Debug: ns: %s; ts: %d; v: %d\n", nslist[internal[i].nsindex].namespace, internal[i].timestamp, internal[i].value);
+   //}
+   fprintf(stdout, "Debug: count: %d memory: %d\n", count, memory);
+ }
+@@ -364,6 +380,7 @@ static VALUE statsrb_write(VALUE self, VALUE logfile, VALUE mode) {
+   const char *filemode = RSTRING_PTR(mode);
+ 
+   StatsrbEvent *internal = rb_iv_get(self, "@internal");
++  StatsrbNS *nslist = rb_iv_get(self, "@nslist");
+   int count = NUM2INT(rb_iv_get(self, "@count"));
+   int i;
+ 
+@@ -379,7 +396,7 @@ static VALUE statsrb_write(VALUE self, VALUE logfile, VALUE mode) {
+     fprintf(file,
+             "%d\t%s\t%d\n",
+             internal[i].timestamp,
+-            internal[i].namespace,
++            nslist[internal[i].nsindex].namespace,
+             internal[i].value
+     );
+   }
+@@ -399,33 +416,22 @@ static VALUE statsrb_write(VALUE self, VALUE logfile, VALUE mode) {
+ */
+ static VALUE statsrb_split_write(VALUE self, VALUE logdir, VALUE mode) {
+   StatsrbEvent *internal = rb_iv_get(self, "@internal");
++  StatsrbNS *nslist = rb_iv_get(self, "@nslist");
++  int nscount = NUM2INT(rb_iv_get(self, "@nscount"));
+   int count = NUM2INT(rb_iv_get(self, "@count"));
+   int i, ii, ns_len;
+ 
+-  VALUE ns_list = rb_ary_new();
+-  VALUE tmp_ns;
+   VALUE tmp;
++  VALUE filename;
+   VALUE klass = rb_obj_class(self);
+ 
+-  for (i = 0; i < count; i++) {
+-    // @TODO this is cause for keeping the namespaces in memory.
+-    // @TODO please don't make a new rb_string for each of these :/
+-    tmp_ns = rb_str_new2(internal[i].namespace);
+-    if (!rb_ary_includes(ns_list, tmp_ns)) {
+-      rb_ary_push(ns_list, tmp_ns);
+-    }
+-  }
+-
+-  ns_len = RARRAY_LEN(ns_list);
+-
+-  for (i = 0; i < ns_len; i++) {
+-    tmp = rb_class_new_instance(0, NULL, klass);
++  for (i = 0; i < nscount; i++) {
+ // @TODO need to free the memory?
++    tmp = rb_class_new_instance(0, NULL, klass);
+     for (ii = 0; ii < count; ii++) {
+-      tmp_ns = rb_str_new2(internal[ii].namespace);
+-      if (rb_str_equal(rb_ary_entry(ns_list, i), tmp_ns)) {
++      if (strcmp(nslist[i].namespace, nslist[internal[ii].nsindex].namespace) == 0) {
+         statsrb_data_push_event(tmp,
+-          internal[ii].namespace,
++          nslist[internal[ii].nsindex].namespace,
+           internal[ii].timestamp,
+           internal[ii].value);
+       }
+@@ -437,7 +443,8 @@ static VALUE statsrb_split_write(VALUE self, VALUE logdir, VALUE mode) {
+     if (filepath[len - 1] != '/') {
+       logdir = rb_str_plus(logdir, rb_str_new2("/"));
+     }
+-    statsrb_write(tmp, rb_str_plus(logdir, rb_ary_entry(ns_list, i)), mode);
++    filename = rb_str_new2(nslist[i].namespace);
++    statsrb_write(tmp, rb_str_plus(logdir, filename), mode);
+   }
+ 
+   return self;
+@@ -554,6 +561,7 @@ static VALUE statsrb_rack_call(VALUE self, VALUE env) {
+     if (jsoncallback != Qnil) {
+       rb_ary_push(body, rb_str_plus(jsoncallback, rb_str_new("(", 1)));
+     }
++    // @TODO move this to a to_json method.
+     char json_start[256];
+     sprintf(json_start, "{\"%s\":[", statsrb_str_ns);
+     rb_ary_push(body, rb_str_new2(json_start));
+@@ -602,12 +610,13 @@ static VALUE statsrb_rack_call(VALUE self, VALUE env) {
+ 
+       int i, data_length = NUM2INT(statsrb_length(tmp));
+       StatsrbEvent *internal = rb_iv_get(tmp, "@internal");
++      StatsrbNS *nslist = rb_iv_get(tmp, "@nslist");
+ 
+       for (i = 0; i < data_length; i++) {
+         rb_ary_push(body, rb_str_new("[", 1));
+         rb_ary_push(body, rb_obj_as_string(INT2NUM(internal[i].timestamp)));
+         rb_ary_push(body, rb_str_new(",\"", 2));
+-        rb_ary_push(body, rb_str_new2(internal[i].namespace));
++        rb_ary_push(body, rb_str_new2(nslist[internal[i].nsindex].namespace));
+         rb_ary_push(body, rb_str_new("\",", 2));
+         rb_ary_push(body, rb_obj_as_string(INT2NUM(internal[i].value)));
+         rb_ary_push(body, rb_str_new("]", 1));
+@@ -670,8 +679,9 @@ static VALUE statsrb_constructor(VALUE self) {
+   rb_iv_set(self, "@count", INT2NUM(0));
+ 
+   // Allocate memory for the list of namespaces.
+-  char **nslist = calloc(nslist, 1 * sizeof(char *));
++  StatsrbNS *nslist = (StatsrbNS *)calloc(1, sizeof(StatsrbNS));
+   rb_iv_set(self, "@nslist", nslist);
++  rb_iv_set(self, "@nsmemory", INT2NUM(0));
+   rb_iv_set(self, "@nscount", INT2NUM(0));
+ 
+   // Internal symbols for :ts, :ns and :v.
+@@ -715,8 +725,9 @@ void Init_statsrb(void) {
+   rb_define_attr(klass, "flush_count", 1, 1);
+   // Use a private property as internal storage.
+   rb_define_attr(klass, "internal", 0, 0);
+-  rb_define_attr(klass, "nslist", 0, 0);
+-  rb_define_attr(klass, "nscount", 0, 0);
+   rb_define_attr(klass, "count", 0, 0);
+   rb_define_attr(klass, "memory", 0, 0);
++  rb_define_attr(klass, "nslist", 0, 0);
++  rb_define_attr(klass, "nscount", 0, 0);
++  rb_define_attr(klass, "nsmemory", 0, 0);
+ }
+diff --git a/statsrb-0.1.4.gem b/statsrb-0.1.4.gem
+index 56f0438..a2b2ba9 100644
+Binary files a/statsrb-0.1.4.gem and b/statsrb-0.1.4.gem differ

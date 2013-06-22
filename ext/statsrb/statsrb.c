@@ -7,10 +7,37 @@
  * Keeps track of a single event.
  */
 typedef struct {
-  char *namespace[256];
+  int ns_index;
+  int nsindex; // deprecated: @TODO make sure to remove refs.
   int timestamp;
   int value;
 } StatsrbEvent;
+
+/**
+ * Keeps track of available namespaces.
+ */
+typedef struct {
+  char *namespace[256];
+} StatsrbNS;
+
+/**
+ * Keeps track of internal storage.
+ */
+typedef struct {
+  StatsrbEvent *event_list;
+  int event_count;
+  int event_memory;
+  StatsrbNS *ns_list;
+  int ns_count;
+  int ns_memory;
+} StatsrbInternal;
+
+static StatsrbInternal* statsrb_get_internal(VALUE self) {
+  StatsrbInternal *internal;
+  Data_Get_Struct(rb_iv_get(self, "@internal"), StatsrbInternal, internal);
+
+  return internal;
+}
 
 /**
  * Returns the length of the internal storage.
@@ -24,6 +51,20 @@ static VALUE statsrb_length(VALUE self) {
 
   return count;
 }
+
+/**
+ * Debugging function.
+ */
+static void statsrb_debug_print_internal(VALUE self) {
+  StatsrbInternal *internal = statsrb_get_internal(self);
+  int i;
+
+  //for (i = 0; i < internal->event_count; i++) {
+    //fprintf(stdout, "Debug: ns: %s; ts: %d; v: %d\n", internal->ns_list[internal->event_list[i].ns_index].namespace, internal->event_list[i].timestamp, internal->event_list[i].value);
+  //}
+  fprintf(stdout, "Debug: count: %d memory: %d\n", internal->event_count, internal->event_memory);
+}
+
 
 /**
  * Implementation of quicksort algorithm.
@@ -82,14 +123,19 @@ static VALUE statsrb_sort(VALUE self) {
  */
 static void statsrb_data_clear_events(self) {
   StatsrbEvent *internal = rb_iv_get(self, "@internal");
+  StatsrbNS *nslist = rb_iv_get(self, "@nslist");
 
   // @TODO test this for memory leaks.
   free(internal);
+  free(nslist);
 
   StatsrbEvent *newinternal = (StatsrbEvent *)calloc(1, sizeof(StatsrbEvent));
+  StatsrbNS *newnslist = (StatsrbNS *)calloc(1, sizeof(StatsrbNS));
   rb_iv_set(self, "@internal", newinternal);
+  rb_iv_set(self, "@nslist", newnslist);
   rb_iv_set(self, "@memory", INT2NUM(sizeof(StatsrbEvent)));
   rb_iv_set(self, "@count", INT2NUM(0));
+  rb_iv_set(self, "@nscount", INT2NUM(0));
 }
 
 /**
@@ -103,22 +149,24 @@ static void statsrb_data_clear_events(self) {
  *   The pointer index of the namespace in @nslist.
  */
 static int statsrb_data_push_ns(VALUE self, const char *namespace) {
-  int i, nscount = NUM2INT(rb_iv_get(self, "@nscount"));
-  char **nslist = rb_iv_get(self, "@nslist");
+  int i;
+  StatsrbInternal *internal = statsrb_get_internal(self);
 
-  for (i = 0; i < nscount; i++) {
-    if (strcmp(nslist[i], namespace) == 0) {
+  for (i = 0; i < internal->ns_count; i++) {
+    if (strcmp(internal->ns_list[i].namespace, namespace) == 0) {
       return i;
     }
   }
 
-  nslist[nscount] = malloc(256);
+  int memory = (internal->ns_count + 1) * sizeof(StatsrbNS);
+  StatsrbNS *success = (StatsrbNS *)realloc(internal->ns_list, memory);
 
-  if (nslist[nscount]) {
-    strcpy(nslist[nscount], namespace);
-    nscount++;
-    rb_iv_set(self, "@nscount", INT2NUM(nscount));
-    return nscount;
+  if (success) {
+    internal->ns_list = success;
+    success = NULL;
+    strcpy(internal->ns_list[internal->ns_count].namespace, namespace);
+    internal->ns_count++;
+    return internal->ns_count - 1;
   }
   else {
     fprintf(stderr, "Error allocating memory");
@@ -136,28 +184,21 @@ static int statsrb_data_push_ns(VALUE self, const char *namespace) {
  * @param int value
  */
 static void statsrb_data_push_event(VALUE self, const char *namespace, int timestamp, int value) {
-  StatsrbEvent *internal = rb_iv_get(self, "@internal");
-  // For some weird reason, we can't rely on rb_iv_get to keep track of the value,
-  // so we'll just make new pointers for each increment. Stupid, yes.
-  int count = NUM2INT(rb_iv_get(self, "@count"));
-  int memory = NUM2INT(rb_iv_get(self, "@memory"));
+  StatsrbInternal *internal = statsrb_get_internal(self);
+  //StatsrbEvent *internal = rb_iv_get(self, "@internal");
 
   // Get the index of the namespace pointer.
-  int nsindex = statsrb_data_push_ns(self, namespace);
+  int ns_index = statsrb_data_push_ns(self, namespace);
 
   // If it appears that we are approaching the end of the memory block, allocate
   // some more.
   // @TODO 2x memory is a little nuts, maybe throttle this back a bit?
-  if ((sizeof(StatsrbEvent) * count) > (memory * .9)) {
-    memory = (2* count) * sizeof(StatsrbEvent);
-    StatsrbEvent *success = (StatsrbEvent *)realloc(internal, memory);
+  if ((sizeof(StatsrbEvent) * internal->event_count) > (internal->event_memory * .9)) {
+    internal->event_memory = (2* internal->event_count) * sizeof(StatsrbEvent);
+    StatsrbEvent *success = (StatsrbEvent *)realloc(internal->event_list, internal->event_memory);
     if (success) {
-      internal = success;
+      internal->event_list = success;
       success = NULL;
-      // Make sure to track our usage.
-      // @TODO this surely isn't ideal, but not sure how get sizeof(*)
-      rb_iv_set(self, "@internal", internal);
-      rb_iv_set(self, "@memory", INT2NUM(memory));
     }
     else {
       fprintf(stderr, "Error allocating memory");
@@ -166,13 +207,12 @@ static void statsrb_data_push_event(VALUE self, const char *namespace, int times
   }
 
   // Set the values;
-  internal[count].timestamp = timestamp;
-  strcpy(internal[count].namespace, namespace);
-  internal[count].value = value;
+  internal->event_list[internal->event_count].timestamp = timestamp;
+  internal->event_list[internal->event_count].ns_index = ns_index;
+  internal->event_list[internal->event_count].value = value;
 
   // Track the count by saving the new pointer.
-  count++;
-  rb_iv_set(self, "@count", INT2NUM(count));
+  internal->event_count++;
 }
 
 /**
@@ -220,10 +260,9 @@ static VALUE statsrb_push(VALUE self, VALUE timestamp, VALUE namespace, VALUE va
  * @param end_time [Number]
  * @return [Array] An array of data hashes.
  */
-static VALUE statsrb_get(VALUE self, VALUE query_ns, VALUE query_limit, VALUE query_start, VALUE query_end) {
-  StatsrbEvent *internal = rb_iv_get(self, "@internal");
-  int count = NUM2INT(rb_iv_get(self, "@count"));
-  char *tmp_ns[256];
+static void statsrb_get(VALUE self, VALUE query_ns, VALUE query_limit, VALUE query_start, VALUE query_end) {
+  StatsrbInternal *internal = statsrb_get_internal(self);
+  int tmp_ts, tmp_v;
 
   VALUE filtered_data = rb_ary_new();
   VALUE statsrb_event;
@@ -235,17 +274,19 @@ static VALUE statsrb_get(VALUE self, VALUE query_ns, VALUE query_limit, VALUE qu
   int qstart = NUM2INT(query_start);
   int qend = NUM2INT(query_end);
 
-  for (i = 0; i < count; i++) {
-    strcpy(tmp_ns, RSTRING_PTR(query_ns));
-    if (strcmp(tmp_ns, internal[i].namespace) == 0
-        && (qstart == 0 || internal[i].timestamp >= qstart)
-        && (qend == 0 || internal[i].timestamp <= qend)) {
+  for (i = 0; i < internal->event_count; i++) {
+    if (strcmp(RSTRING_PTR(query_ns), internal->ns_list[internal->event_list[i].ns_index].namespace) == 0
+        && (qstart == 0 || internal->event_list[i].timestamp >= qstart)
+        && (qend == 0 || internal->event_list[i].timestamp <= qend)) {
+
+      memcpy(&tmp_ts, &internal->event_list[i].timestamp, sizeof(int));
+      memcpy(&tmp_v, &internal->event_list[i].value, sizeof(int));
 
       statsrb_event = statsrb_create_rb_event_hash(
         self,
-        INT2NUM(internal[i].timestamp),
-        rb_str_new2(internal[i].namespace),
-        INT2NUM(internal[i].value)
+        INT2NUM(tmp_ts),
+        rb_str_new2(internal->ns_list[internal->event_list[i].ns_index].namespace),
+        INT2NUM(tmp_v)
       );
 
       rb_ary_push(filtered_data, statsrb_event);
@@ -259,21 +300,6 @@ static VALUE statsrb_get(VALUE self, VALUE query_ns, VALUE query_limit, VALUE qu
   }
 
   return filtered_data;
-}
-
-/**
- * Debugging function.
- */
-static void statsrb_debug_print_internal(VALUE self) {
-  StatsrbEvent *internal = rb_iv_get(self, "@internal");
-  int count = NUM2INT(rb_iv_get(self, "@count"));
-  int i;
-  int memory = NUM2INT(rb_iv_get(self, "@memory"));
-
-  //for (i = 0; i < count; i++) {
-    //fprintf(stdout, "Debug: ns: %s; ts: %d; v: %d\n", internal[i].namespace, internal[i].timestamp, internal[i].value);
-  //}
-  fprintf(stdout, "Debug: count: %d memory: %d\n", count, memory);
 }
 
 /**
@@ -364,6 +390,7 @@ static VALUE statsrb_write(VALUE self, VALUE logfile, VALUE mode) {
   const char *filemode = RSTRING_PTR(mode);
 
   StatsrbEvent *internal = rb_iv_get(self, "@internal");
+  StatsrbNS *nslist = rb_iv_get(self, "@nslist");
   int count = NUM2INT(rb_iv_get(self, "@count"));
   int i;
 
@@ -379,7 +406,7 @@ static VALUE statsrb_write(VALUE self, VALUE logfile, VALUE mode) {
     fprintf(file,
             "%d\t%s\t%d\n",
             internal[i].timestamp,
-            internal[i].namespace,
+            nslist[internal[i].nsindex].namespace,
             internal[i].value
     );
   }
@@ -399,33 +426,22 @@ static VALUE statsrb_write(VALUE self, VALUE logfile, VALUE mode) {
 */
 static VALUE statsrb_split_write(VALUE self, VALUE logdir, VALUE mode) {
   StatsrbEvent *internal = rb_iv_get(self, "@internal");
+  StatsrbNS *nslist = rb_iv_get(self, "@nslist");
+  int nscount = NUM2INT(rb_iv_get(self, "@nscount"));
   int count = NUM2INT(rb_iv_get(self, "@count"));
   int i, ii, ns_len;
 
-  VALUE ns_list = rb_ary_new();
-  VALUE tmp_ns;
   VALUE tmp;
+  VALUE filename;
   VALUE klass = rb_obj_class(self);
 
-  for (i = 0; i < count; i++) {
-    // @TODO this is cause for keeping the namespaces in memory.
-    // @TODO please don't make a new rb_string for each of these :/
-    tmp_ns = rb_str_new2(internal[i].namespace);
-    if (!rb_ary_includes(ns_list, tmp_ns)) {
-      rb_ary_push(ns_list, tmp_ns);
-    }
-  }
-
-  ns_len = RARRAY_LEN(ns_list);
-
-  for (i = 0; i < ns_len; i++) {
-    tmp = rb_class_new_instance(0, NULL, klass);
+  for (i = 0; i < nscount; i++) {
 // @TODO need to free the memory?
+    tmp = rb_class_new_instance(0, NULL, klass);
     for (ii = 0; ii < count; ii++) {
-      tmp_ns = rb_str_new2(internal[ii].namespace);
-      if (rb_str_equal(rb_ary_entry(ns_list, i), tmp_ns)) {
+      if (strcmp(nslist[i].namespace, nslist[internal[ii].nsindex].namespace) == 0) {
         statsrb_data_push_event(tmp,
-          internal[ii].namespace,
+          nslist[internal[ii].nsindex].namespace,
           internal[ii].timestamp,
           internal[ii].value);
       }
@@ -437,7 +453,8 @@ static VALUE statsrb_split_write(VALUE self, VALUE logdir, VALUE mode) {
     if (filepath[len - 1] != '/') {
       logdir = rb_str_plus(logdir, rb_str_new2("/"));
     }
-    statsrb_write(tmp, rb_str_plus(logdir, rb_ary_entry(ns_list, i)), mode);
+    filename = rb_str_new2(nslist[i].namespace);
+    statsrb_write(tmp, rb_str_plus(logdir, filename), mode);
   }
 
   return self;
@@ -554,6 +571,7 @@ static VALUE statsrb_rack_call(VALUE self, VALUE env) {
     if (jsoncallback != Qnil) {
       rb_ary_push(body, rb_str_plus(jsoncallback, rb_str_new("(", 1)));
     }
+    // @TODO move this to a to_json method.
     char json_start[256];
     sprintf(json_start, "{\"%s\":[", statsrb_str_ns);
     rb_ary_push(body, rb_str_new2(json_start));
@@ -602,12 +620,13 @@ static VALUE statsrb_rack_call(VALUE self, VALUE env) {
 
       int i, data_length = NUM2INT(statsrb_length(tmp));
       StatsrbEvent *internal = rb_iv_get(tmp, "@internal");
+      StatsrbNS *nslist = rb_iv_get(tmp, "@nslist");
 
       for (i = 0; i < data_length; i++) {
         rb_ary_push(body, rb_str_new("[", 1));
         rb_ary_push(body, rb_obj_as_string(INT2NUM(internal[i].timestamp)));
         rb_ary_push(body, rb_str_new(",\"", 2));
-        rb_ary_push(body, rb_str_new2(internal[i].namespace));
+        rb_ary_push(body, rb_str_new2(nslist[internal[i].nsindex].namespace));
         rb_ary_push(body, rb_str_new("\",", 2));
         rb_ary_push(body, rb_obj_as_string(INT2NUM(internal[i].value)));
         rb_ary_push(body, rb_str_new("]", 1));
@@ -642,6 +661,7 @@ static VALUE statsrb_rack_call(VALUE self, VALUE env) {
  * Populates the internal storage with test data.
  */
 static void statsrb_load_test(VALUE self, VALUE ns, VALUE amt) {
+  StatsrbInternal *internal = statsrb_get_internal(self);
   int i, val;
   srand(time(NULL));
   for (i = 0; i < NUM2INT(amt); i++) {
@@ -649,8 +669,7 @@ static void statsrb_load_test(VALUE self, VALUE ns, VALUE amt) {
     statsrb_data_push_event(self, RSTRING_PTR(ns), val + 100, val + 1);
   }
   statsrb_debug_print_internal(self);
-  int ctest = NUM2INT(rb_iv_get(self, "@count"));
-  fprintf(stdout, "Debug: count: %d\n", ctest);
+  fprintf(stdout, "Debug: count: %d\n", internal->event_count);
 }
 
 /**
@@ -664,15 +683,28 @@ static VALUE statsrb_constructor(VALUE self) {
   rb_iv_set(self, "@flush_count", INT2NUM(9));
 
   // Allocate internal memory for the StatsrbEvent structs.
-  StatsrbEvent *internal = (StatsrbEvent *)calloc(1, sizeof(StatsrbEvent));
-  rb_iv_set(self, "@internal", internal);
-  rb_iv_set(self, "@memory", INT2NUM(sizeof(StatsrbEvent)));
-  rb_iv_set(self, "@count", INT2NUM(0));
+  StatsrbEvent *eventlist = (StatsrbEvent *)calloc(1, sizeof(StatsrbEvent));
+  //rb_iv_set(self, "@internal", internal);
+  //rb_iv_set(self, "@memory", INT2NUM(sizeof(StatsrbEvent)));
+  //rb_iv_set(self, "@count", INT2NUM(0));
 
   // Allocate memory for the list of namespaces.
-  char **nslist = calloc(nslist, 1 * sizeof(char *));
-  rb_iv_set(self, "@nslist", nslist);
-  rb_iv_set(self, "@nscount", INT2NUM(0));
+  StatsrbNS *nslist = (StatsrbNS *)calloc(1, sizeof(StatsrbNS));
+  //rb_iv_set(self, "@nslist", nslist);
+  //rb_iv_set(self, "@nsmemory", INT2NUM(0));
+  //rb_iv_set(self, "@nscount", INT2NUM(0));
+
+  // Allocate memory for the pointer storage;
+  VALUE internal;
+  StatsrbInternal *internalptr = (StatsrbInternal *)calloc(1, sizeof(StatsrbInternal));
+  internalptr->event_list = eventlist;
+  internalptr->event_count = 0;
+  internalptr->event_memory = 0;
+  internalptr->ns_list = nslist;
+  internalptr->ns_count = 0;
+  internalptr->ns_memory = 0;
+  internal = Data_Wrap_Struct(internal, 0, free, internalptr);
+  rb_iv_set(self, "@internal", internal);
 
   // Internal symbols for :ts, :ns and :v.
   VALUE statsrb_key_ts = rb_str_intern(rb_str_new2("ts"));
@@ -715,8 +747,9 @@ void Init_statsrb(void) {
   rb_define_attr(klass, "flush_count", 1, 1);
   // Use a private property as internal storage.
   rb_define_attr(klass, "internal", 0, 0);
-  rb_define_attr(klass, "nslist", 0, 0);
-  rb_define_attr(klass, "nscount", 0, 0);
   rb_define_attr(klass, "count", 0, 0);
   rb_define_attr(klass, "memory", 0, 0);
+  rb_define_attr(klass, "nslist", 0, 0);
+  rb_define_attr(klass, "nscount", 0, 0);
+  rb_define_attr(klass, "nsmemory", 0, 0);
 }

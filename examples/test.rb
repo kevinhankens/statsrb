@@ -5,7 +5,7 @@ require 'json'
 require 'pp'
 
 # basic test
- s = Statsrb.new
+s = Statsrb.new
 #s.push 34567, "kevin", 345
 #s.push 12345, "kevin", 123
 #s.push 23456, "kevin", 234
@@ -15,12 +15,32 @@ require 'pp'
 
 
 # test load and sort
-#s.load_test "kevin", 100000
-#s.load_test "melissa", 100000
-#s.load_test "benjamin", 100000
+s.load_test "kevin", 200000
+s.load_test "melissa", 200000
+s.load_test "benjamin", 200000
 #s.sort
-#pp s.get "kevin", 100, 0, 0
-# pp s.get "kevin", 10, 0, 0
+#s.write "/tmp/statsrb/kevintest.log", "a+"
+100.times do |i|
+  p s.get "kevin", 10, 0, 0
+end
+s.load_test "benjamin", 200000
+
+#s.sort
+#a = s.get "kevin", 100, 0, 0
+#b = s.get "kevin", 1000, 0, 0
+#c = s.get "kevin", 1000, 0, 0
+#d = s.get "kevin", 1000, 0, 0
+#e = s.get "kevin", 1000, 0, 0
+#f = s.get "kevin", 1000, 0, 0
+#g = s.get "kevin", 1000, 0, 0
+#h = s.get "kevin", 10, 0, 0
+# 100.times do |i|
+#  s.load_test "kevin", 100
+#  s.load_test "melissa", 100
+#  s.load_test "benjamin", 100
+#  s.get "benjamin", 10, 0, 0
+# end
+#pp h[0]
 # s.write "/tmp/kevin.txt", "w+"
 # s.split_write "/tmp/", "w+"
 
