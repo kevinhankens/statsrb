@@ -11,14 +11,12 @@ class TestStatsrb < MiniTest::Test
     @s = Statsrb.new
     @tmpfile = "/tmp/test.statsrb"
     @s.split_file_dir = "/tmp/"
-    @s.flush_count = 5
+    @s.flush_count = 10
   end
 
   def teardown
     File.delete @tmpfile unless !File.exists? @tmpfile
-    rackfile = @tmpfile + "test1"
-    File.delete rackfile unless !File.exists? rackfile
-    rackfile = @tmpfile + "test2"
+    rackfile = "/tmp/test"
     File.delete rackfile unless !File.exists? rackfile
   end
 
@@ -117,16 +115,39 @@ class TestStatsrb < MiniTest::Test
       @s.call(env);
     end
 
-    assert_equal @s.length, 5
+    assert_equal 5, @s.length
+
+    # Write enough data to flush.
+    5.times do |i|
+      @s.call(env);
+    end
 
     # Test getting data.
     env = {
-      "PATH_INFO" => "/GET/test1",
+      "PATH_INFO" => "/GET/test",
       "QUERY_STRING" => ""
     }
 
     resp = @s.call(env)
     data = JSON.parse(resp[2].join)
-    assert_equal data["test1"].length, 3
+    assert_equal data["test"].length, 10
+  end
+
+  # Tests large data volumes.
+  def test_large_data
+    @s.load_test "kevin", 500000
+    @s.load_test "melissa", 500000
+    @s.load_test "benjamin", 500000
+    @s.sort
+    t = @s.get "kevin", 10000, 0, 0
+    assert_equal t.length, 10000
+    @s.write @tmpfile, "w+"
+    @s.clear
+    @s.read @tmpfile, "melissa", 10000, 0, 0
+    # @TODO searching for nonexistant ns segfaults :(
+    #t = @s.get "kevin", 10000, 0, 0
+    #assert_equal t.length, 0
+    t = @s.get "melissa", 10000, 0, 0
+    assert_equal t.length, 10000
   end
 end

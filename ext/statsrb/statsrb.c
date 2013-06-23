@@ -297,8 +297,10 @@ static VALUE statsrb_push(VALUE self, VALUE timestamp, VALUE namespace, VALUE va
 static void statsrb_get(VALUE self, VALUE query_ns, VALUE query_limit, VALUE query_start, VALUE query_end) {
   StatsrbInternal *internal = statsrb_get_internal(self);
   int tmp_ts, tmp_v;
+  char *tmp_ns = (char *) malloc(256);
 
   VALUE filtered_data = rb_ary_new();
+  VALUE rb_ns_list = rb_ary_new();
   VALUE statsrb_event;
 
   int i = 0;
@@ -308,8 +310,16 @@ static void statsrb_get(VALUE self, VALUE query_ns, VALUE query_limit, VALUE que
   int qstart = NUM2INT(query_start);
   int qend = NUM2INT(query_end);
 
+  VALUE rb_ns;
+
+  // Create rb strings for the namespaces.
+  for (i = 0; i < internal->ns_count; i++) {
+    rb_hash_aset(rb_ns_list, INT2NUM(i), rb_str_new2(internal->ns_list[i].namespace));
+  }
+
   for (i = 0; i < internal->event_count; i++) {
-    if (strcmp(RSTRING_PTR(query_ns), internal->ns_list[internal->event_list[i].ns_index].namespace) == 0
+    // @TODO this isn't very efficient.
+    if (strcmp(RSTRING_PTR(query_ns), RSTRING_PTR(rb_hash_aref(rb_ns_list, INT2NUM(internal->event_list[i].ns_index)))) == 0
         && (qstart == 0 || internal->event_list[i].timestamp >= qstart)
         && (qend == 0 || internal->event_list[i].timestamp <= qend)) {
 
@@ -319,7 +329,7 @@ static void statsrb_get(VALUE self, VALUE query_ns, VALUE query_limit, VALUE que
       statsrb_event = statsrb_create_rb_event_hash(
         self,
         INT2NUM(tmp_ts),
-        rb_str_new2(internal->ns_list[internal->event_list[i].ns_index].namespace),
+        rb_hash_aref(rb_ns_list, INT2NUM(internal->event_list[i].ns_index)),
         INT2NUM(tmp_v)
       );
 
@@ -332,6 +342,8 @@ static void statsrb_get(VALUE self, VALUE query_ns, VALUE query_limit, VALUE que
       break;
     }
   }
+
+  free(tmp_ns);
 
   return filtered_data;
 }
@@ -581,7 +593,7 @@ static VALUE statsrb_rack_call(VALUE self, VALUE env) {
 
       rb_ary_push(body, rb_obj_as_string(INT2NUM(data_length)));
 
-      if (data_length > NUM2INT(rb_iv_get(self, "@flush_count"))) {
+      if (data_length >= NUM2INT(rb_iv_get(self, "@flush_count"))) {
         statsrb_sort(self);
         statsrb_split_write(self, rb_iv_get(self, "@split_file_dir"), rb_str_new2("a+"));
         statsrb_data_clear_events(self);

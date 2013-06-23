@@ -19,16 +19,15 @@ s.load_test "kevin", 200000
 s.load_test "melissa", 200000
 s.load_test "benjamin", 200000
 s.sort
-s.write "/tmp/statsrb/kevintest.log", "w+"
-#2.times do |i|
+#s.write "/tmp/statsrb/kevintest.log", "w+"
+10.times do |i|
   pp s.get "kevin", 10, 0, 0
-  s.clear
-  pp s.get "kevin", 10, 0, 0
-#end
+  pp s.get "melissa", 10, 0, 0
+end
 
-t = Statsrb.new
-t.read "/tmp/statsrb/kevintest.log", "benjamin", 100, 107445, 0
-t.write "/tmp/statsrb/bentest.log", "w+"
+#t = Statsrb.new
+#t.read "/tmp/statsrb/kevintest.log", "benjamin", 100, 107445, 0
+#t.write "/tmp/statsrb/bentest.log", "w+"
 
 # todo, call
 
