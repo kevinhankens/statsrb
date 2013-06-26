@@ -313,12 +313,23 @@ static void statsrb_get(VALUE self, VALUE query_ns, VALUE query_limit, VALUE que
   VALUE rb_ns;
 
   // Create rb strings for the namespaces.
+  int found = 0;
   for (i = 0; i < internal->ns_count; i++) {
     rb_hash_aset(rb_ns_list, INT2NUM(i), rb_str_new2(internal->ns_list[i].namespace));
+    if (strcmp(RSTRING_PTR(query_ns), RSTRING_PTR(rb_hash_aref(rb_ns_list, INT2NUM(i)))) == 0) {
+      found = 1;
+    }
   }
 
+  // Return right away if the namespace doesn't exist.
+  if (found == 0) {
+    rb_ary_resize(filtered_data, (long) 0);
+    return filtered_data;
+  }
+
+  // Iterate through the in-memory data to find matches.
   for (i = 0; i < internal->event_count; i++) {
-    // @TODO this isn't very efficient.
+    // @TODO this isn't very efficient to keep creating NUM objects.
     if (strcmp(RSTRING_PTR(query_ns), RSTRING_PTR(rb_hash_aref(rb_ns_list, INT2NUM(internal->event_list[i].ns_index)))) == 0
         && (qstart == 0 || internal->event_list[i].timestamp >= qstart)
         && (qend == 0 || internal->event_list[i].timestamp <= qend)) {

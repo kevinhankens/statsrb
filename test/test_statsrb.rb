@@ -133,21 +133,36 @@ class TestStatsrb < MiniTest::Test
     assert_equal data["test"].length, 10
   end
 
+  def test_no_results
+    push_data
+    t = @s.get "noresults", 100, 0, 0
+    assert_equal(t.length, 0);
+  end
+
   # Tests large data volumes.
   def test_large_data
+    # Load a lot of data.
     @s.load_test "kevin", 500000
     @s.load_test "melissa", 500000
     @s.load_test "benjamin", 500000
     @s.sort
-    t = @s.get "kevin", 10000, 0, 0
-    assert_equal t.length, 10000
+    # Extract all of one namespace.
+    t = @s.get "melissa", 100000, 0, 0
+    assert_equal t.length, 100000
+    # Push them back to the object.
+    t.each do |i|
+      @s.push i[:ts], i[:ns], i[:v]
+    end
+    # Save it to file and clear it.
     @s.write @tmpfile, "w+"
     @s.clear
-    @s.read @tmpfile, "melissa", 10000, 0, 0
-    # @TODO searching for nonexistant ns segfaults :(
-    #t = @s.get "kevin", 10000, 0, 0
-    #assert_equal t.length, 0
-    t = @s.get "melissa", 10000, 0, 0
-    assert_equal t.length, 10000
+    # Re-load the data.
+    @s.read @tmpfile, "melissa", 600000, 0, 0
+    # Try to get one that doesn't exist.
+    t = @s.get "kevin", 10000, 0, 0
+    assert_equal t.length, 0
+    # Try to get all of the data out.
+    t = @s.get "melissa", 600000, 0, 0
+    assert_equal t.length, 600000
   end
 end
