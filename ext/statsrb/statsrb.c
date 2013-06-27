@@ -295,9 +295,10 @@ static VALUE statsrb_push(VALUE self, VALUE timestamp, VALUE namespace, VALUE va
  * @return [Array] An array of data hashes.
  */
 static void statsrb_get(VALUE self, VALUE query_ns, VALUE query_limit, VALUE query_start, VALUE query_end) {
+  // @TODO maybe it would be sane to make a new statsrb object and then just have
+  // methods to dump everything to ary, json, etc.
   StatsrbInternal *internal = statsrb_get_internal(self);
-  int tmp_ts, tmp_v;
-  char *tmp_ns = (char *) malloc(256);
+  int tmp_ts, tmp_v, tmp_i;
 
   VALUE filtered_data = rb_ary_new();
   VALUE rb_ns_list = rb_ary_new();
@@ -313,24 +314,23 @@ static void statsrb_get(VALUE self, VALUE query_ns, VALUE query_limit, VALUE que
   VALUE rb_ns;
 
   // Create rb strings for the namespaces.
-  int found = 0;
+  signed int found = -1;
   for (i = 0; i < internal->ns_count; i++) {
     rb_hash_aset(rb_ns_list, INT2NUM(i), rb_str_new2(internal->ns_list[i].namespace));
     if (strcmp(RSTRING_PTR(query_ns), RSTRING_PTR(rb_hash_aref(rb_ns_list, INT2NUM(i)))) == 0) {
-      found = 1;
+      memcpy(&found, &i, sizeof(int));
     }
   }
 
   // Return right away if the namespace doesn't exist.
-  if (found == 0) {
+  if (found == -1) {
     rb_ary_resize(filtered_data, (long) 0);
     return filtered_data;
   }
 
   // Iterate through the in-memory data to find matches.
   for (i = 0; i < internal->event_count; i++) {
-    // @TODO this isn't very efficient to keep creating NUM objects.
-    if (strcmp(RSTRING_PTR(query_ns), RSTRING_PTR(rb_hash_aref(rb_ns_list, INT2NUM(internal->event_list[i].ns_index)))) == 0
+    if (found == internal->event_list[i].ns_index
         && (qstart == 0 || internal->event_list[i].timestamp >= qstart)
         && (qend == 0 || internal->event_list[i].timestamp <= qend)) {
 
@@ -340,21 +340,23 @@ static void statsrb_get(VALUE self, VALUE query_ns, VALUE query_limit, VALUE que
       statsrb_event = statsrb_create_rb_event_hash(
         self,
         INT2NUM(tmp_ts),
-        rb_hash_aref(rb_ns_list, INT2NUM(internal->event_list[i].ns_index)),
+        rb_hash_aref(rb_ns_list, INT2NUM(found)),
         INT2NUM(tmp_v)
       );
 
       rb_ary_push(filtered_data, statsrb_event);
-
       filtered_count++;
+    }
+    else {
+      // @TODO WTF!?
+      // If have a miss filtered_data seems to get garbage collected or broken :/
+      rb_ary_resize(filtered_data, filtered_count);
     }
 
     if (limit > 0 && filtered_count == limit) {
       break;
     }
   }
-
-  free(tmp_ns);
 
   return filtered_data;
 }

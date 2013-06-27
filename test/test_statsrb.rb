@@ -50,6 +50,8 @@ class TestStatsrb < MiniTest::Test
   # Tests that we can filter the in-memory data.
   def test_get_data
     push_data
+    t = @s.get "test1", 100, 0, 0
+    assert_equal(t.length, 3);
     t = @s.get "test2", 100, 0, 0
     assert_equal(t.length, 2);
   end
