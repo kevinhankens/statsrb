@@ -36,7 +36,7 @@ typedef struct {
  */
 static StatsrbInternal* statsrb_get_internal(VALUE self) {
   StatsrbInternal *internal;
-  Data_Get_Struct(rb_iv_get(self, "@internal"), StatsrbInternal, internal);
+  Data_Get_Struct(self, StatsrbInternal, internal);
 
   return internal;
 }
@@ -52,7 +52,6 @@ static void statsrb_alloc_internal(VALUE self) {
   StatsrbNS *nslist = (StatsrbNS *)calloc(1, sizeof(StatsrbNS));
 
   // Allocate memory for the pointer storage;
-  VALUE internal;
   StatsrbInternal *internalptr = (StatsrbInternal *)calloc(1, sizeof(StatsrbInternal));
   internalptr->event_list = eventlist;
   internalptr->event_count = 0;
@@ -60,8 +59,7 @@ static void statsrb_alloc_internal(VALUE self) {
   internalptr->ns_list = nslist;
   internalptr->ns_count = 0;
   internalptr->ns_memory = 0;
-  internal = Data_Wrap_Struct(internal, 0, free, internalptr);
-  rb_iv_set(self, "@internal", internal);
+  return Data_Wrap_Struct(self, 0, free, internalptr);
 }
 
 /**
@@ -735,8 +733,6 @@ static VALUE statsrb_constructor(VALUE self) {
   rb_iv_set(self, "@split_file_dir", statsrb_split_file_dir);
   rb_iv_set(self, "@flush_count", INT2NUM(9));
 
-  statsrb_alloc_internal(self);
-
   // Internal symbols for :ts, :ns and :v.
   VALUE statsrb_key_ts = rb_str_intern(rb_str_new2("ts"));
   rb_iv_set(self, "@key_ts", statsrb_key_ts);
@@ -756,6 +752,7 @@ void Init_statsrb(void) {
   VALUE klass = rb_define_class("Statsrb", rb_cObject);
 
   // Instance methods and properties.
+  rb_define_alloc_func(klass, statsrb_alloc_internal);
   rb_define_method(klass, "initialize", statsrb_constructor, 0);
   rb_define_method(klass, "query", statsrb_read, 5);
   rb_define_method(klass, "read", statsrb_read, 5);
