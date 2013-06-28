@@ -61,7 +61,8 @@ class TestStatsrb < MiniTest::Test
     current = 0
     push_data
     @s.sort
-    @s.data.each do |value|
+    t = @s.get "test1", 100, 0, 0
+    t.each do |value|
       assert value[:ts] > current
       current = value[:ts]
     end

@@ -1,12 +1,12 @@
 statsrb
 =======
-This gem is a lightweight, self-contained (yet extendable) time series stats aggregation server written in C. The rack appliance can be used to record stats from your application via a simple REST API, and offers a simple API for searching and sorting. Each data segment is given a namespace that can be tracked through time. For example, you could send a count of logged-in users every minute and track that metric over time.
+This gem is a lightweight, self-contained (yet extendable) time series stats aggregation server written in C. Your data is stored and retrieved via a simple REST API, that API has endpoints for searching and sorting. Each data segment that you want to track is given a namespace that can be watched over time. For example, you could send a count of logged-in users every minute and track that metric over a timespan.
 
-All REST queries are served with JSON data, optionally using jsonp if you need to execute cross-domain queries. Since this is fundamentally for time-series data, all requests are ordered chronologically.
+The gem is Rack compatable, meaning that it will function well with any Rack server. All REST queries are served with JSON data, optionally using jsonp if you need to execute cross-domain queries. Since this is fundamentally for time-series data, all requests are ordered chronologically.
 
-If you do not need the REST API, the gem provides a Statsrb object that can be used to store data locally, also providing search and sort functionality.
+If you do not need the REST API, the gem provides a Statsrb Ruby object that can be used to store data locally, also providing search and sort functionality.
 
-The philosophy behind statsrb is that you can leverage the speed of a gem written in C while making it easy to extend using ruby. Since time series data is simple, and quickly sorted, flat file storage is perfectly adequate. Without complicated databases, storage is kept to a minimum and the data can easily be used in other applications. Statsrb works great out of the box with a rack server and a Javascript library like Flot. It can just as easily be integrated into any Ruby app.
+The philosophy behind statsrb is that you can leverage the speed of a gem written in C while making it easy to extend using ruby. The internal data is stored using C structures and pointers to avoid any unnecessary memory allocation. This keeps things small and fast. Since time series data is simple, and quickly sorted, flat file storage is perfectly adequate. Without complicated databases, storage is kept to a minimum and the data can easily be used in other applications. Statsrb works great out of the box with a Rack server like Puma and a Javascript library like Flot. It can just as easily be integrated into any Ruby app to track without making HTTP requests.
 
 As evidenced by the version number, this project is just getting started. Please feel free to submit issues or pull requests... any help would be appreciated :)
 

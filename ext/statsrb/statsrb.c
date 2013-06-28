@@ -64,8 +64,7 @@ static VALUE statsrb_alloc_internal(VALUE self) {
 
 /**
  * Clears out the internal memory.
- *
- * @param VALUE self
+ * @return [void]
  */
 static void statsrb_data_clear_events(VALUE self) {
   StatsrbInternal *internal = statsrb_get_internal(self);
@@ -98,6 +97,7 @@ static void statsrb_data_clear_events(VALUE self) {
 
 /**
  * Returns the length of the internal storage.
+ * @return [Numeric] The count of items in the internal storage.
  */
 static VALUE statsrb_length(VALUE self) {
   StatsrbInternal *internal = statsrb_get_internal(self);
@@ -159,15 +159,15 @@ void time_sort(int left, int right, StatsrbEvent * event_list) {
 }
 
 /**
- * Sorts @data using a quicksort algorithm based on the hash element's timestamp.
- * @return [Hash] The sorted data
+ * Sorts internal data using a quicksort algorithm based on the hash element's timestamp.
+ * @return [Statsrb] A reference to the object.
  */
 static VALUE statsrb_sort(VALUE self) {
   StatsrbInternal *internal = statsrb_get_internal(self);
   if (internal->event_count > 0) {
     time_sort(0, internal->event_count - 1, internal->event_list);
   }
-// @TODO what to return??
+
   return self;
 }
 
@@ -255,7 +255,6 @@ static void statsrb_data_push_event(VALUE self, const char *namespace, int times
  * @param VALUE v
  */
 VALUE statsrb_create_rb_event_hash(VALUE self, VALUE ts, VALUE ns, VALUE v) {
-  // @data hash key symbols.
   VALUE statsrb_key_ts = rb_iv_get(self, "@key_ts");
   VALUE statsrb_key_ns = rb_iv_get(self, "@key_ns");
   VALUE statsrb_key_v = rb_iv_get(self, "@key_v");
@@ -289,7 +288,7 @@ static VALUE statsrb_push(VALUE self, VALUE timestamp, VALUE namespace, VALUE va
  * @param limit [Number]
  * @param start_time [Number]
  * @param end_time [Number]
- * @return [Array] An array of data hashes.
+ * @return [Array] An array of data event hashes.
  */
 static VALUE statsrb_get(VALUE self, VALUE query_ns, VALUE query_limit, VALUE query_start, VALUE query_end) {
   // @TODO maybe it would be sane to make a new statsrb object and then just have
@@ -355,7 +354,7 @@ static VALUE statsrb_get(VALUE self, VALUE query_ns, VALUE query_limit, VALUE qu
 }
 
 /**
- * Locates data from a specified file and loads into @data.
+ * Locates data from a specified file and loads into internal memory.
  * @param filepath [String]
  * @param namespace [String]
  * @param limit [Number]
@@ -431,7 +430,7 @@ static VALUE statsrb_read(VALUE self, VALUE logfile, VALUE query_ns, VALUE query
 
 
 /**
- * Writes the @data in memory to a specified file.
+ * Writes the in memory data to a specified file.
  * @param filepath [String]
  * @param filemode [String]
  * @return [Statsrb] A reference to the object.
@@ -450,7 +449,7 @@ static VALUE statsrb_write(VALUE self, VALUE logfile, VALUE mode) {
     return self;
   }
 
-  // Iterate through the data array, writing the data as we go.
+  // Iterate through the internal data, writing as we go.
   for (i = 0; i < internal->event_count; i++) {
     // @TODO make sure that these values are not empty before writing.
     fprintf(file,
@@ -466,12 +465,9 @@ static VALUE statsrb_write(VALUE self, VALUE logfile, VALUE mode) {
 }
 
 /**
- * Locates data from a specified file and loads into @data.
+ * Writes the in memory data to a separate files based on namespace.
  * @param filepath [String]
- * @param namespace [String]
- * @param limit [Number]
- * @param start_time [Number]
- * @param end_time [Number]
+ * @param filemode [String]
  * @return [Statsrb] A reference to the object.
 */
 static VALUE statsrb_split_write(VALUE self, VALUE logdir, VALUE mode) {
@@ -704,6 +700,9 @@ static VALUE statsrb_rack_call(VALUE self, VALUE env) {
 
 /**
  * Populates the internal storage with test data.
+ *
+ * @param namespace [String]
+ * @param amount [Numeric]
  */
 static void statsrb_load_test(VALUE self, VALUE ns, VALUE amt) {
   StatsrbInternal *internal = statsrb_get_internal(self);
@@ -721,8 +720,6 @@ static void statsrb_load_test(VALUE self, VALUE ns, VALUE amt) {
  * Class constructor, sets up an instance variable.
  */
 static VALUE statsrb_constructor(VALUE self) {
-  VALUE statsrb_data = rb_ary_new();
-  rb_iv_set(self, "@data", statsrb_data);
   VALUE statsrb_split_file_dir = rb_str_new("/tmp", 4);
   rb_iv_set(self, "@split_file_dir", statsrb_split_file_dir);
   rb_iv_set(self, "@flush_count", INT2NUM(9));
@@ -759,12 +756,8 @@ void Init_statsrb(void) {
   rb_define_method(klass, "push", statsrb_push, 3);
   rb_define_method(klass, "clear", statsrb_data_clear_events, 0);
   rb_define_method(klass, "call", statsrb_rack_call, 1);
-  // Define :attr_accessor (read/write instance var)
-  // Note that this must correspond with a call to rb_iv_self() and it's string name must be @data.
-  // An array of hashes keyed with :ts(timestamp), :ns(namespace) and :v(value) e.g. [!{:ts => Time.now.to_i, :ns => "test", :v => 33}]
-  rb_define_attr(klass, "data", 1, 1);
   // The file directory to write when splitting namespaces. @see #split_write
   rb_define_attr(klass, "split_file_dir", 1, 1);
-  // When used with a rack server, the max count of @data before flushing and writing to file.
+  // When used with a rack server, the max count of internal events.
   rb_define_attr(klass, "flush_count", 1, 1);
 }

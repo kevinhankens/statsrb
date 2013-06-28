@@ -1,9 +1,9 @@
 Gem::Specification.new do |s|
   s.name        = 'statsrb'
-  s.version     = '0.1.4'
-  s.date        = '2013-06-08'
+  s.version     = '0.2.0'
+  s.date        = '2013-06-28'
   s.summary     = "A Ruby time series stats repository."
-  s.description = "A Ruby time series stats repository using flat file storage, providing a Ruby API as well as a Rack compatible REST API."
+  s.description = "A Ruby time series stats repository written in C, using flat file storage, providing a Ruby API as well as a Rack compatible REST API."
   s.authors     = ["Kevin Hankens"]
   s.email       = 'email@kevinhankens.com'
   s.files       = ["lib/statsrb.rb"]

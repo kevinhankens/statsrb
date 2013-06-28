@@ -30,6 +30,9 @@ s.clear
 s.query "/tmp/test.statsrb", "test1", 100, 0, 0  # 0.1.3
 s.read "/tmp/test.statsrb", "test1", 100, 0, 0   # 0.1.4+
 
+# Load a bunch of test data
+s.load_test "test3", 1000
+
 # Sort the data
 s.sort
 
