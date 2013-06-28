@@ -44,7 +44,7 @@ static StatsrbInternal* statsrb_get_internal(VALUE self) {
 /**
  * Internal: allocates internal storage.
  */
-static void statsrb_alloc_internal(VALUE self) {
+static VALUE statsrb_alloc_internal(VALUE self) {
   // Allocate internal memory for the StatsrbEvent structs.
   StatsrbEvent *eventlist = (StatsrbEvent *)calloc(1, sizeof(StatsrbEvent));
 
@@ -203,7 +203,6 @@ static int statsrb_data_push_ns(VALUE self, const char *namespace) {
   }
   else {
     fprintf(stderr, "Error allocating memory");
-    return;
   }
 
 }
@@ -292,7 +291,7 @@ static VALUE statsrb_push(VALUE self, VALUE timestamp, VALUE namespace, VALUE va
  * @param end_time [Number]
  * @return [Array] An array of data hashes.
  */
-static void statsrb_get(VALUE self, VALUE query_ns, VALUE query_limit, VALUE query_start, VALUE query_end) {
+static VALUE statsrb_get(VALUE self, VALUE query_ns, VALUE query_limit, VALUE query_start, VALUE query_end) {
   // @TODO maybe it would be sane to make a new statsrb object and then just have
   // methods to dump everything to ary, json, etc.
   StatsrbInternal *internal = statsrb_get_internal(self);
