@@ -1,6 +1,6 @@
 statsrb
 =======
-This gem is a lightweight, self-contained (yet extendable) time series stats aggregation server written in C. Your data is stored and retrieved via a simple REST API, that API has endpoints for searching and sorting. Each data segment that you want to track is given a namespace that can be watched over time. For example, you could send a count of logged-in users every minute and track that metric over a timespan.
+This gem is a lightweight, self-contained (yet extendable) time series stats aggregation server written in C. Your data can easily be stored and retrieved via a simple REST API. Each data segment that you want to track is given a namespace that can be watched over time. For example, you could send a count of logged-in users every minute and track that metric over a timespan.
 
 The gem is Rack compatable, meaning that it will function well with any Rack server. All REST queries are served with JSON data, optionally using jsonp if you need to execute cross-domain queries. Since this is fundamentally for time-series data, all requests are ordered chronologically.
 
@@ -91,11 +91,15 @@ s.clear
 s.query "/tmp/test.statsrb", "test1", 100, 0, 0  # 0.1.3
 s.read "/tmp/test.statsrb", "test1", 100, 0, 0   # 0.1.4+
 
+# Load a bunch of test data
+s.load_test "test3", 1000
+
 # Sort the data
 s.sort
 
 # Save the indexed data if you like.
-s.write "/tmp/test.statsrb", "w+"```
+s.write "/tmp/test.statsrb", "w+"
+```
 
 HTML/Javascript Example using jQuery and Flot
 ---------------------------------------------
