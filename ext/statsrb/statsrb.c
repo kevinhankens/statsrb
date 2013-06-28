@@ -345,17 +345,13 @@ static void statsrb_get(VALUE self, VALUE query_ns, VALUE query_limit, VALUE que
       rb_ary_push(filtered_data, statsrb_event);
       filtered_count++;
     }
-    else {
-      // @TODO WTF!?
-      // If have a miss filtered_data seems to get garbage collected or broken :/
-      rb_ary_resize(filtered_data, filtered_count);
-    }
 
     if (limit > 0 && filtered_count == limit) {
       break;
     }
   }
 
+  rb_ary_resize(filtered_data, filtered_count);
   return filtered_data;
 }
 
@@ -483,12 +479,11 @@ static VALUE statsrb_split_write(VALUE self, VALUE logdir, VALUE mode) {
   StatsrbInternal *internal = statsrb_get_internal(self);
   int i, ii, ns_len;
 
-  VALUE tmp;
   VALUE filename;
   VALUE klass = rb_obj_class(self);
+  VALUE tmp = rb_class_new_instance(0, NULL, klass);
 
   for (i = 0; i < internal->ns_count; i++) {
-    tmp = rb_class_new_instance(0, NULL, klass);
     for (ii = 0; ii < internal->event_count; ii++) {
       if (strcmp(internal->ns_list[i].namespace, internal->ns_list[internal->event_list[ii].ns_index].namespace) == 0) {
         statsrb_data_push_event(tmp,
