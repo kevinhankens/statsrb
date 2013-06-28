@@ -67,7 +67,7 @@ static void statsrb_alloc_internal(VALUE self) {
  *
  * @param VALUE self
  */
-static void statsrb_data_clear_events(self) {
+static void statsrb_data_clear_events(VALUE self) {
   StatsrbInternal *internal = statsrb_get_internal(self);
 
   // Allocate internal memory for the StatsrbEvent structs.
